@@ -133,18 +133,16 @@ class Visualization(object):
                      format(self.name, num, dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%f"),
                             dt.datetime.fromtimestamp(self._intention_self.header.stamp.to_time()).strftime("%M:%S.%f")), fontsize=10)
         t = np.asanyarray(self._intention_self.data).reshape(self.scale, self.scale)
-        x, y =  np.meshgrid(np.arange(0, self.scale, 1.), np.arange(0, self.scale, 1.))
+        x, y = np.meshgrid(np.arange(0, self.scale, 1.), np.arange(0, self.scale, 1.))
         ax.text(self.pose[1], self.pose[0], "{}({},{})".format(self.name, self.pose[0], self.pose[1]), fontsize='small')
         for nm in self.neighbor_names:
             if self._pose_received.has_key(nm):
                 p2 = self._pose_received[nm]
                 # fix3d not self pose
-                ax.text(p2[0], p2[1], "{}({},{})".format(nm, p2[0], p2[1]), fontsize='small')
+                ax.text(p2[1], p2[0], "{}({},{})".format(nm, p2[0], p2[1]), fontsize='small')
 
         p = ax.contour(x, y, t, 6,colors='k')
         ax.clabel(p, fontsize=9, inline=1)
-        cb = plt.colorbar(p, shrink=0.5, aspect=5)
-        cb.set_label("Joint dist. at A")
         return p
 
     def update_sent_viz(self, num, unused_iterable, ax, to_uav, cax):
@@ -154,10 +152,6 @@ class Visualization(object):
         :type ax: Axes
         :return:
         """
-
-        # frames dir should be created to run
-        # if num < 200:
-        #     plt.savefig("{}/frames{}/{}_to_{}_{:04d}.png".format(os.path.dirname(__file__), self.name, self.name, to_uav, num))
         ax.clear()
         # Setting the axes properties
         ax.set_xlim([0.0, float(self.scale)])
@@ -169,7 +163,7 @@ class Visualization(object):
         ax.set_xticks([])
         ax.set_yticks([])
 
-        ax.text(self.pose[0], self.pose[1], self.name)
+        ax.text(self.pose[1], self.pose[0], self.name)
         for nm in self.neighbor_names:
             if self._pose_received.has_key(nm):
                 p2 = self._pose_received[nm]
@@ -177,21 +171,9 @@ class Visualization(object):
         if self._intention_sent.has_key(to_uav):
             ax.set_title("{}>{}#{}-T1-{}-T0-{}".format(self.name, to_uav, num,dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%f"),
                                                        dt.datetime.fromtimestamp(self._intention_sent[to_uav].header.stamp.to_time()).strftime("%M:%S.%f")), fontsize=10)
-
-
             t = np.asanyarray(self._intention_sent[to_uav].data).reshape(self.scale, self.scale)
-            norm = mpl.colors.Normalize(vmin=np.min(t), vmax=np.max(t), clip=True)
-            ind = np.where(t > .0001)
-            x, y = ind[0], ind[1]
-            p = ax.scatter(x, y, c=t[ind], norm=norm)
-            # x, y = np.meshgrid(np.arange(0, self.scale, dtype='int'), np.arange(0, self.scale, dtype='int'))
-            # print(x.shape, y.shape, t.shape, self.scale)
-            # p = plt.contour(x, y, t)
-            # plt.clabel(p, inline=True,fontsize=10)
-            # uncomment when save in fig
-            cb = plt.colorbar(p, cax=cax)
-            cb.set_label("{}-->{}".format(self.name, to_uav, num))
-            cb.ax.set_xticklabels([np.min(t[ind]), np.max(t[ind])])
+            x, y = np.meshgrid(np.arange(0, self.scale, 1.), np.arange(0, self.scale, 1.))
+            p = ax.contour(x, y, t, 6,colors='k')
             return p
         else:
             print("No update sent to {}".format(to_uav))
@@ -228,18 +210,9 @@ class Visualization(object):
         if self._intention_received.has_key(from_uav):
             ax.set_title("{}<{}#{}-T1-{}-T0-{}".format(self.name, from_uav, num,dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%f"),
                                                        dt.datetime.fromtimestamp(self._intention_received[from_uav].header.stamp.to_time()).strftime("%M:%S.%f")), fontsize=10)
-            t = np.asanyarray(self._intention_received[from_uav].data).reshape(self.scale, self.scale)
-            norm = mpl.colors.Normalize(vmin=np.min(t), vmax=np.max(t), clip=True)
-            ind = np.where(t > .0001)
-            x, y = ind[0], ind[1]
-            p = ax.scatter(x, y, c=t[ind], norm=norm)
-            # x, y = np.meshgrid(np.arange(0, self.scale, dtype='int'), np.arange(0, self.scale, dtype='int'))
-            # p = plt.contour(x, y, t)
-            # plt.clabel(p, inline=True,fontsize=10)
-            # uncomment when save in fig
-            cb = plt.colorbar(p, cax=cax)
-            cb.set_label("{}<--{}".format(self.name, from_uav, num))
-            cb.ax.set_xticklabels([np.min(t[ind]), np.max(t[ind])])
+            t = np.asanyarray(self._intention_sent[from_uav].data).reshape(self.scale, self.scale)
+            x, y = np.meshgrid(np.arange(0, self.scale, 1.), np.arange(0, self.scale, 1.))
+            p = ax.contour(x, y, t, 6,colors='k')
             return p
         else:
             print("no update received from {}!".format(from_uav))

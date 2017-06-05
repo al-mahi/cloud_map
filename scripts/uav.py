@@ -107,7 +107,7 @@ class dummy_uav(object):
         res = new_intention / np.sum(new_intention)
 
         wall = np.zeros(self._space)
-        wall[:, 0] = wall[0, :] = wall[:, self._scale-1] = wall[self._scale-1, :] = .005
+        wall[:, 0] = wall[0, :] = wall[:, self._scale-1] = wall[self._scale-1, :] = .0001
 
         self._intention_fusion = np.array(res.reshape(self._space), dtype=np.float32) + wall
 
@@ -118,26 +118,6 @@ class dummy_uav(object):
         if self._dim == 3:
             x, y, z = map(int, self.position[:])
 
-        # global gradient calculation is not feasible in real-time for two reasons
-        # 1. it will be very slow
-        # 2. numerical un-stability of extreme values
-        # confining gradient calculation withing local ranges
-        # local range has critical effect
-        # local_range = int(self._scale/3)
-        # # slice local dist. calc indices; prefix s- starting, e- ending
-        # # min and max of local dist should be calculated excluding the wall
-        # sx = max(0, (x + 1) - local_range)
-        # sy = max(0, (y + 1) - local_range)
-        # ex = min(self._scale - 1, x + local_range)
-        # ey = min(self._scale - 1, y + local_range)
-        # local_dist = self._intention_fusion[sx:ex, sy:ey]
-        # # translate cur position in the sliced frame of ref
-        # nx, ny = x-sx-1, y-sy-1
-        # # where to fly? gradient descent thus calculate gradient on the inverse function here complement prob.
-        # local_gradient = np.array(np.gradient(1.-local_dist), dtype=np.float32)
-        # gradient_at_cur_pos = local_gradient[:, nx, ny]
-
-        # rospy.logdebug("fusion`\n{}\ngradient\n{}".format(1.-self._intention_fusion, np.gradient(1.-self._intention_fusion)))
         if self._dim == 2:
             gradient_at_cur_pos = np.array(np.gradient(1.-self._intention_fusion), dtype=np.float32)[:, x, y]
         if self._dim == 3:
@@ -157,11 +137,12 @@ class dummy_uav(object):
                 if scaled_grad[2] > (threshold) and self.pose.position.z + 1 < self._scale: self.pose.position.z += 1.
                 if scaled_grad[2] < (-1.*threshold) and self.pose.position.z > 0: self.pose.position.z -= 1.
         else:
-            dx = np.random.randint(low=-1, high=2, size=self._dim)
-            if 0 <= self.pose.position.x + dx[0] < self._scale: self.pose.position.x += dx[0]
-            if 0 <= self.pose.position.y + dx[1] < self._scale: self.pose.position.y += dx[1]
-            if self._dim == 3:
-                if 0 <= self.pose.position.z + dx[2] < self._scale: self.pose.position.z += dx[2]
+            pass
+            # dx = np.random.randint(low=-1, high=2, size=self._dim)
+            # if 0 <= self.pose.position.x + dx[0] < self._scale: self.pose.position.x += dx[0]
+            # if 0 <= self.pose.position.y + dx[1] < self._scale: self.pose.position.y += dx[1]
+            # if self._dim == 3:
+            #     if 0 <= self.pose.position.z + dx[2] < self._scale: self.pose.position.z += dx[2]
         rospy.logdebug("[{}]{}:{}->{} grad {}|{} k>>0{}".format(dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%f"), self.name, old_pos, self.position, gradient_at_cur_pos, scaled_grad, np.isclose(k, 0.)))
 
     def callback(self, pdf_intention):
@@ -211,7 +192,6 @@ class dummy_uav(object):
             self._msg_received[from_uav] = init_belief
         self._pose = Pose(Point(1. * np.random.randint(0, self._scale), 1. * np.random.randint(0, self._scale), 0.),
                           Quaternion(*quaternion_from_euler(0., 0., np.pi)))
-
         q_size = 10
         # fix3d
         pub_pose = rospy.Publisher(self.name + '/pose', Pose, queue_size=q_size)

@@ -283,9 +283,9 @@ class Visualization(object):
 
 def visualizer(name):
     # delete previous output plots
-    cmd = "rm /home/alien/catkin_ws/src/dummy_cloud_map/scripts/frames{}/*".format(name)
+    cmd = "rm /home/alien/catkin_ws/src/cloud_map/scripts/frames{}/*".format(name)
     os.system(cmd)
-    cmd = "rm /home/alien/catkin_ws/src/dummy_cloud_map/scripts/gifs/*".format(name)
+    cmd = "rm /home/alien/catkin_ws/src/cloud_map/scripts/gifs/*".format(name)
     os.system(cmd)
     # default scale 2 will be overwritten by rosparam space
     scale = int(rospy.get_param("/scale"))
@@ -299,5 +299,5 @@ def visualizer(name):
     viz.start_node()
 
     print("-----------------------making gifs-----------------------")
-    os.system("sh /home/alien/catkin_ws/src/dummy_cloud_map/scripts/gifify.sh")
+    os.system("sh /home/alien/catkin_ws/src/cloud_map/scripts/gifify.sh")
 

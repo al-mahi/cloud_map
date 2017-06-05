@@ -10,7 +10,7 @@ from dummy_cloud_map.msg import Belief
 
 
 class Unexplored(object):
-    def __init__(self, name, dim, scale, q_size=60):
+    def __init__(self, name, dim, scale, q_size=48):
         self._name = name
         self._dim = dim
         self._scale = scale
