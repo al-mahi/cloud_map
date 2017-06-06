@@ -15,12 +15,12 @@ from matplotlib import cm
 import os
 import rospy
 from geometry_msgs.msg import Pose, Point, Quaternion, Twist, Vector3
-from dummy_cloud_map.msg import Belief
+from cloud_map.msg import Belief
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from subprocess import call
 import datetime as dt
 # plt.rcParams['animation.ffmpeg_path'] = '/usr/bin/ffmpeg'
-from dummy_cloud_map.msg import Belief
+from cloud_map.msg import Belief
 
 
 class Visualization(object):

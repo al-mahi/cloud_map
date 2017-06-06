@@ -116,7 +116,7 @@ class Visualization(object):
         :type ax: Axes
         :return:
         """
-        if num < 200:
+        if num < 1000:
             plt.savefig("{}/frames{}/{}_{:04d}_joint.png".format(os.path.dirname(__file__), self.name, self.name, num))
         ax.clear()
         # Setting the axes properties
@@ -141,7 +141,7 @@ class Visualization(object):
                 # fix3d not self pose
                 ax.text(p2[1], p2[0], "{}({},{})".format(nm, p2[0], p2[1]), fontsize='small')
 
-        p = ax.contour(x, y, t, 6,colors='k')
+        p = ax.contour(x, y, t)
         ax.clabel(p, fontsize=9, inline=1)
         return p
 
@@ -167,7 +167,7 @@ class Visualization(object):
         for nm in self.neighbor_names:
             if self._pose_received.has_key(nm):
                 p2 = self._pose_received[nm]
-                ax.text(p2[0], p2[1], nm)
+                ax.text(p2[1], p2[0], nm)
         if self._intention_sent.has_key(to_uav):
             ax.set_title("{}>{}#{}-T1-{}-T0-{}".format(self.name, to_uav, num,dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%f"),
                                                        dt.datetime.fromtimestamp(self._intention_sent[to_uav].header.stamp.to_time()).strftime("%M:%S.%f")), fontsize=10)
@@ -201,16 +201,16 @@ class Visualization(object):
 
         # ax.set_title("{}<--{}#{}-{}".format(self.name, from_uav, num,dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%.f")), fontsize=10)
 
-        ax.text(self.pose[0], self.pose[1], self.name)
+        ax.text(self.pose[1], self.pose[0], self.name)
         for nm in self.neighbor_names:
             if self._pose_received.has_key(nm):
                 p3 = self._pose_received[nm]
-                ax.text(p3[0], p3[1], nm)
+                ax.text(p3[1], p3[0], nm)
 
         if self._intention_received.has_key(from_uav):
             ax.set_title("{}<{}#{}-T1-{}-T0-{}".format(self.name, from_uav, num,dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%f"),
                                                        dt.datetime.fromtimestamp(self._intention_received[from_uav].header.stamp.to_time()).strftime("%M:%S.%f")), fontsize=10)
-            t = np.asanyarray(self._intention_sent[from_uav].data).reshape(self.scale, self.scale)
+            t = np.asanyarray(self._intention_received[from_uav].data).reshape(self.scale, self.scale)
             x, y = np.meshgrid(np.arange(0, self.scale, 1.), np.arange(0, self.scale, 1.))
             p = ax.contour(x, y, t, 6,colors='k')
             return p
@@ -251,9 +251,9 @@ class Visualization(object):
 
 def visualizer(name):
     # delete previous output plots
-    cmd = "rm /home/alien/catkin_ws/src/dummy_cloud_map/scripts/frames{}/*".format(name)
+    cmd = "rm /home/alien/catkin_ws/src/cloud_map/scripts/frames{}/*".format(name)
     os.system(cmd)
-    cmd = "rm /home/alien/catkin_ws/src/dummy_cloud_map/scripts/gifs/*".format(name)
+    cmd = "rm /home/alien/catkin_ws/src/cloud_map/scripts/gifs/*".format(name)
     os.system(cmd)
     # default scale 2 will be overwritten by rosparam space
     scale = int(rospy.get_param("/scale"))
@@ -267,5 +267,5 @@ def visualizer(name):
     viz.start_node()
 
     print("-----------------------making gifs-----------------------")
-    os.system("sh /home/alien/catkin_ws/src/dummy_cloud_map/scripts/gifify.sh")
+    os.system("sh /home/alien/catkin_ws/src/cloud_map/scripts/gifify.sh")
 

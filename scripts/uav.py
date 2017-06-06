@@ -53,7 +53,7 @@ class dummy_uav(object):
         """
         :rtype: np.ndarray
         """
-        return np.array(self._pose.position.__getstate__()[:self._dim])
+        return np.array(self._pose.position.__getstate__()[:self._dim]) + np.random.uniform(low=-1., high=1.) * 0.00001
 
     @property
     def neighbour_names(self):
@@ -76,7 +76,7 @@ class dummy_uav(object):
         of the uav. the distribution is over the 3d space
         :rtype: np.ndarray
         """
-        dist = multivariate_normal(mean=self.position, cov=.5 * np.identity(self._dim))
+        dist = multivariate_normal(mean=self.position, cov=1.*self._scale * np.identity(self._dim))
         indices = np.ndindex(self._space)
         self._belief = np.array(
             map(lambda x: dist.pdf(np.array(x[:])), indices), dtype=np.float32).reshape(self._space)
@@ -106,8 +106,10 @@ class dummy_uav(object):
         new_intention -= self.belief_position
         res = new_intention / np.sum(new_intention)
 
-        wall = np.zeros(self._space)
-        wall[:, 0] = wall[0, :] = wall[:, self._scale-1] = wall[self._scale-1, :] = .0001
+        X, Y = np.meshgrid(np.arange(0, self._scale, 1.), np.arange(0, self._scale, 1.))
+        wall = (X-self._scale/2)**4 + (Y-self._scale/2)**4
+        wall /= np.sum(wall)
+        wall *= 0.001
 
         self._intention_fusion = np.array(res.reshape(self._space), dtype=np.float32) + wall
 
@@ -123,27 +125,36 @@ class dummy_uav(object):
         if self._dim == 3:
             gradient_at_cur_pos = np.array(np.gradient(1.-self._intention_fusion), dtype=np.float32)[:, x, y, z]
 
-        k = np.linalg.norm(gradient_at_cur_pos.ravel(), ord=np.inf)
+        k = np.sqrt(np.sum(gradient_at_cur_pos**2.))
         scaled_grad = gradient_at_cur_pos/k
 
         old_pos = self.position
-        if not np.isclose(k, 0.):
-            threshold = 0.3
-            if scaled_grad[0] > (threshold) and self.pose.position.x + 1 < self._scale: self.pose.position.x += 1.
-            if scaled_grad[1] > (threshold) and self.pose.position.y + 1 < self._scale: self.pose.position.y += 1.
-            if scaled_grad[0] < (-1.*threshold) and self.pose.position.x > 0: self.pose.position.x -= 1.
-            if scaled_grad[1] < (-1.*threshold) and self.pose.position.y > 0: self.pose.position.y -= 1.
+        if not np.isclose(k, 0., atol=1.e-12):
+            threshold = 0.1
+            noisy_unit = (1. + np.random.uniform(low=-1., high=1.) * 0.00001)
+            if scaled_grad[0] > (threshold) and self.pose.position.x + 1 < self._scale:
+                self.pose.position.x += noisy_unit
+            if scaled_grad[1] > (threshold) and self.pose.position.y + 1 < self._scale:
+                self.pose.position.y += noisy_unit
+            if scaled_grad[0] < (-1.*threshold) and self.pose.position.x > 0:
+                self.pose.position.x -= noisy_unit
+            if scaled_grad[1] < (-1.*threshold) and self.pose.position.y > 0:
+                self.pose.position.y -= noisy_unit
             if self._dim == 3:
-                if scaled_grad[2] > (threshold) and self.pose.position.z + 1 < self._scale: self.pose.position.z += 1.
-                if scaled_grad[2] < (-1.*threshold) and self.pose.position.z > 0: self.pose.position.z -= 1.
+                if scaled_grad[2] > (threshold) and self.pose.position.z + 1 < self._scale:
+                    self.pose.position.z += noisy_unit
+                if scaled_grad[2] < (-1.*threshold) and self.pose.position.z > 0:
+                    self.pose.position.z -= noisy_unit
         else:
             pass
-            # dx = np.random.randint(low=-1, high=2, size=self._dim)
+            # dx = np.random.uniform(low=-1, high=1., size=self._dim)
             # if 0 <= self.pose.position.x + dx[0] < self._scale: self.pose.position.x += dx[0]
             # if 0 <= self.pose.position.y + dx[1] < self._scale: self.pose.position.y += dx[1]
             # if self._dim == 3:
             #     if 0 <= self.pose.position.z + dx[2] < self._scale: self.pose.position.z += dx[2]
-        rospy.logdebug("[{}]{}:{}->{} grad {}|{} k>>0{}".format(dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%f"), self.name, old_pos, self.position, gradient_at_cur_pos, scaled_grad, np.isclose(k, 0.)))
+        # np.set_printoptions(suppress=True)
+        rospy.logdebug("{}:occupancy\n{}".format(self.name, self._intention_fusion))
+        rospy.logdebug("[{}]{}:{}->{} grad {}|{} 0?{}".format(dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%f"), self.name, old_pos, self.position, gradient_at_cur_pos, scaled_grad, np.isclose(k, 0.)))
 
     def callback(self, pdf_intention):
         """
@@ -190,8 +201,9 @@ class dummy_uav(object):
             init_belief.header.stamp = rospy.Time.now()
             init_belief.data = np.ones(self._scale ** self._dim, dtype=np.float32).ravel()
             self._msg_received[from_uav] = init_belief
-        self._pose = Pose(Point(1. * np.random.randint(0, self._scale), 1. * np.random.randint(0, self._scale), 0.),
+        self._pose = Pose(Point(1. * np.random.uniform(low=0, high=self._scale), 1. * np.random.uniform(low=0, high=self._scale), 0.),
                           Quaternion(*quaternion_from_euler(0., 0., np.pi)))
+
         q_size = 10
         # fix3d
         pub_pose = rospy.Publisher(self.name + '/pose', Pose, queue_size=q_size)

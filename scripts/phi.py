@@ -10,7 +10,7 @@ from dummy_cloud_map.msg import Belief
 
 
 class Unexplored(object):
-    def __init__(self, name, dim, scale, q_size=48):
+    def __init__(self, name, dim, scale, q_size=100):
         self._name = name
         self._dim = dim
         self._scale = scale
@@ -25,14 +25,17 @@ class Unexplored(object):
         :type pose: Pose 
         :return: 
         """
-        self._q_pose.append(np.array(pose.position.__getstate__()[:self._dim], dtype='int'))
+        dist = multivariate_normal(mean=np.array(pose.position.__getstate__()[:self._dim], dtype='int'),
+                                   cov=self._scale * np.identity(self._dim))
+        indices = np.ndindex(self._space)
+        last = np.array(
+            map(lambda x: dist.pdf(np.array(x[:])), indices), dtype=np.float32).reshape(self._space)
+
+        self._q_pose.append(last)
         self._q_pose = self._q_pose[-self._q_size:]
         self._phi_unexplored = np.zeros(self._space)
         for p in self._q_pose:
-            if len(p) == 2:
-                self._phi_unexplored[p[0], p[1]] += 1.
-            elif len(p) == 3:
-                self._phi_unexplored[p[0], p[1], p[2]] += 1.
+                self._phi_unexplored += p
         self._phi_unexplored /= np.sum(self._phi_unexplored)
 
     def start(self):

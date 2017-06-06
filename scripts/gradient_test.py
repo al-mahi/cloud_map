@@ -9,7 +9,7 @@ import time
 import mpl_toolkits.mplot3d.axes3d as p3
 
 
-class dummy_uav(object):
+class uav(object):
     def __init__(self, name, d=8, sensor_tmp=False, sensor_hum=False, sensor_pressure=False):
         self.name = name
         self._d = d
@@ -98,7 +98,7 @@ class dummy_uav(object):
         self.position = new_pos
 
 if __name__ == '__main__':
-    uav = dummy_uav('A')
+    uav = uav('A')
     for i in range(100):
         print("iteration {}".format(i))
         uav.visualize(i)
