@@ -6,11 +6,11 @@ from geometry_msgs.msg import Pose, Point, Quaternion, Twist, Vector3
 from tf.transformations import quaternion_from_euler
 from rospy.numpy_msg import numpy_msg
 from std_msgs.msg import String
-from dummy_cloud_map.msg import Belief
+from cloud_map.msg import Belief
 
 
 class Unexplored(object):
-    def __init__(self, name, dim, scale, q_size=100):
+    def __init__(self, name, dim, scale, q_size=120):
         self._name = name
         self._dim = dim
         self._scale = scale
@@ -41,7 +41,7 @@ class Unexplored(object):
     def start(self):
         rospy.init_node(self._name, log_level=rospy.DEBUG)
         rate = rospy.Rate(4)
-        rospy.Subscriber("/UAV_FW/" + self._name + "/pose", Pose, callback=self.callback_pose)
+        rospy.Subscriber("/UAV/" + self._name + "/pose", Pose, callback=self.callback_pose)
         pub_unexplored = rospy.Publisher(self._name + '/unexplored', numpy_msg(Belief), queue_size=10.)
         while not rospy.is_shutdown():
             msg = Belief()

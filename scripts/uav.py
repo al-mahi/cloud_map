@@ -5,9 +5,10 @@ import rospy
 from geometry_msgs.msg import Pose, Point, Quaternion, Twist, Vector3
 from tf.transformations import quaternion_from_euler
 from rospy.numpy_msg import numpy_msg
-from std_msgs.msg import String
-from dummy_cloud_map.msg import Belief
+from std_msgs.msg import String, Float32
+from cloud_map.msg import Belief
 import datetime as dt
+import time
 
 
 class dummy_uav(object):
@@ -32,6 +33,7 @@ class dummy_uav(object):
         self._msg_received = {}  # type: dict[str, Belief]
         self._msg_send = {} # type: dict[str, np.ndarray]
         self._phi = {}  # type: dict[str, np.ndarray]
+        self._pub_goal_euclid = rospy.Publisher("/UAV/{}/next_way_point_euclid".format(self._name), data_class=Pose, queue_size=10)
 
     @property
     def name(self):
@@ -109,7 +111,7 @@ class dummy_uav(object):
         X, Y = np.meshgrid(np.arange(0, self._scale, 1.), np.arange(0, self._scale, 1.))
         wall = (X-self._scale/2)**4 + (Y-self._scale/2)**4
         wall /= np.sum(wall)
-        wall *= 0.001
+        wall *= 0.1
 
         self._intention_fusion = np.array(res.reshape(self._space), dtype=np.float32) + wall
 
@@ -129,32 +131,27 @@ class dummy_uav(object):
         scaled_grad = gradient_at_cur_pos/k
 
         old_pos = self.position
+        goal = Pose()
         if not np.isclose(k, 0., atol=1.e-12):
             threshold = 0.1
-            noisy_unit = (1. + np.random.uniform(low=-1., high=1.) * 0.00001)
-            if scaled_grad[0] > (threshold) and self.pose.position.x + 1 < self._scale:
-                self.pose.position.x += noisy_unit
-            if scaled_grad[1] > (threshold) and self.pose.position.y + 1 < self._scale:
-                self.pose.position.y += noisy_unit
-            if scaled_grad[0] < (-1.*threshold) and self.pose.position.x > 0:
-                self.pose.position.x -= noisy_unit
-            if scaled_grad[1] < (-1.*threshold) and self.pose.position.y > 0:
-                self.pose.position.y -= noisy_unit
+            noisy_unit = (3. + np.random.uniform(low=-1., high=1.) * 0.00001)
+            if scaled_grad[0] > (threshold) and self.pose.position.x + noisy_unit < self._scale:
+                goal.position.x = self.pose.position.x + noisy_unit
+            if scaled_grad[1] > (threshold) and self.pose.position.y + noisy_unit < self._scale:
+                goal.position.y = self.pose.position.y + noisy_unit
+            if scaled_grad[0] < (-1.*threshold) and self.pose.position.x > noisy_unit - 1.:
+                goal.position.x = self.pose.position.x - noisy_unit
+            if scaled_grad[1] < (-1.*threshold) and self.pose.position.y > noisy_unit - 1.:
+                goal.position.y = self.pose.position.y - noisy_unit
             if self._dim == 3:
-                if scaled_grad[2] > (threshold) and self.pose.position.z + 1 < self._scale:
-                    self.pose.position.z += noisy_unit
-                if scaled_grad[2] < (-1.*threshold) and self.pose.position.z > 0:
-                    self.pose.position.z -= noisy_unit
-        else:
-            pass
-            # dx = np.random.uniform(low=-1, high=1., size=self._dim)
-            # if 0 <= self.pose.position.x + dx[0] < self._scale: self.pose.position.x += dx[0]
-            # if 0 <= self.pose.position.y + dx[1] < self._scale: self.pose.position.y += dx[1]
-            # if self._dim == 3:
-            #     if 0 <= self.pose.position.z + dx[2] < self._scale: self.pose.position.z += dx[2]
-        # np.set_printoptions(suppress=True)
-        rospy.logdebug("{}:occupancy\n{}".format(self.name, self._intention_fusion))
-        rospy.logdebug("[{}]{}:{}->{} grad {}|{} 0?{}".format(dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%f"), self.name, old_pos, self.position, gradient_at_cur_pos, scaled_grad, np.isclose(k, 0.)))
+                if scaled_grad[2] > (threshold) and self.pose.position.z + noisy_unit < self._scale:
+                    goal.position.z = self.pose.position.z + noisy_unit
+                if scaled_grad[2] < (-1.*threshold) and self.pose.position.z > noisy_unit - 1:
+                    goal.position.z = self.pose.position.z - noisy_unit
+
+        # rospy.logdebug("{}:occupancy\n{}".format(self.name, self._intention_fusion))
+        rospy.logdebug("[{}]{}:{}->{} grad {}|{} 0?{}".format(dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%f"), self.name, old_pos, np.array([goal.position.x, goal.position.y, goal.position.z]), gradient_at_cur_pos, scaled_grad, np.isclose(k, 0.)))
+        self._pub_goal_euclid.publish(goal)
 
     def callback(self, pdf_intention):
         """
@@ -173,27 +170,29 @@ class dummy_uav(object):
         """
         self.pose = pose
 
-    def callback_fly(self, msg_fly):
+    def callback_goal_reached(self, distance):
         """
-        :type msg_fly: String
+        :type distance: Float32
         """
-        if msg_fly.data == "fly":
+        rospy.logdebug("{} distance {}".format(self.name, distance))
+        if float(distance.data) < 0.5:
             self.fly()
 
     def callback_phi_unexplored(self, pdf_unexplored):
         # :type pdf_unexplored: Belief
         self._phi["unexplored"] = np.asanyarray(pdf_unexplored.data, dtype=np.float32).reshape(self._space)
 
-    def take_off(self):
+    def take_off(self, start_at):
         """
         uav rosnode launcher and intention publisher
         """
         rospy.init_node(self._name, log_level=rospy.DEBUG)
-        rate = rospy.Rate(4)
-        rospy.Subscriber("/UAV_FW/fly", String, callback=self.callback_fly)
+        rate = rospy.Rate(2)
+        rospy.Subscriber("/solo/{}/pose_euclid".format(self._name), Pose, callback=self.callback_sensor_pose)
+        rospy.Subscriber("/solo/{}/distance_from_goal".format(self._name), Float32, callback=self.callback_goal_reached)
         rospy.Subscriber("/PHI/{}/unexplored".format(self.name), numpy_msg(Belief), callback=self.callback_phi_unexplored)
         for from_uav in self.neighbour_names:
-            topic = "/UAV_FW/" + from_uav + "/intention_sent"
+            topic = "/UAV/" + from_uav + "/intention_sent"
             rospy.Subscriber(topic, Belief, callback=self.callback)
             # initialize all other uavs intention uniformly
             init_belief = Belief()
@@ -201,8 +200,11 @@ class dummy_uav(object):
             init_belief.header.stamp = rospy.Time.now()
             init_belief.data = np.ones(self._scale ** self._dim, dtype=np.float32).ravel()
             self._msg_received[from_uav] = init_belief
-        self._pose = Pose(Point(1. * np.random.uniform(low=0, high=self._scale), 1. * np.random.uniform(low=0, high=self._scale), 0.),
-                          Quaternion(*quaternion_from_euler(0., 0., np.pi)))
+        self._pose = Pose(Point(start_at[0], start_at[1], start_at[2]), Quaternion(*quaternion_from_euler(0., 0., np.pi)))
+
+        time.sleep(15)
+        rospy.logdebug("{} sending to inital goal (x,y)=({}, {})!!!".format(self.name, self._pose.position.x, self._pose.position.y))
+        self._pub_goal_euclid.publish(self._pose)
 
         q_size = 10
         # fix3d
@@ -238,18 +240,19 @@ class dummy_uav(object):
             rate.sleep()
 
 
-def launch_uav(name):
+def launch_uav(name,start_at):
     # default scale 2 will be overwritten by rosparam space
     dim = int(rospy.get_param("/dim"))
     scale = int(rospy.get_param("/scale"))
     uav = dummy_uav(name=name, dim=dim, scale=scale)
 
-    if rospy.has_param("/UAV_FW/" + name + "/neighbors"):
-        neighbours = rospy.get_param("/UAV_FW/" + name + "/neighbors").split("_")
-        rospy.logdebug("Launch UAV {} with neighbors {}".format(uav.name, neighbours))
-        for n in neighbours:
+    neighbors = []
+    if rospy.has_param("/UAV/" + name + "/neighbors"):
+        neighbors = rospy.get_param("/UAV/" + name + "/neighbors").split("_")
+        rospy.logdebug("Launch UAV {} with neighbors {}".format(uav.name, neighbors))
+        for n in neighbors:
             # todo validate the format of n
             uav.neighbour_names.append(n)
 
-    print("UAV_2D launcing {} with neighboues {}".format(name, neighbours))
-    uav.take_off()
+    print("UAV_2D launcing {} with neighbors {}".format(name, neighbors))
+    uav.take_off(start_at=start_at)

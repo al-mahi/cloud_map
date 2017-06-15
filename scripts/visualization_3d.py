@@ -39,16 +39,16 @@ class Visualization(object):
         rate = rospy.Rate(1)
         # for nm in self.neighbor_names:
         #     rospy.logdebug("[Visual] {} waiting for {}.".format(self.name, nm))
-        #     rospy.wait_for_message("/UAV_FW/" + nm + "/pose", Pose, timeout=5.)
+        #     rospy.wait_for_message("/UAV/" + nm + "/pose", Pose, timeout=5.)
 
         rospy.logdebug("Launch Visual Node {} with neighbors {}".format(self.name, self.neighbor_names))
-        rospy.Subscriber("/UAV_FW/" + self.name + "/intention_self", Belief, callback=self.callback_intention_self)
-        rospy.Subscriber("/UAV_FW/" + self.name + "/pose", Pose, callback=self.callback_pose, callback_args=self.name)
+        rospy.Subscriber("/UAV/" + self.name + "/intention_self", Belief, callback=self.callback_intention_self)
+        rospy.Subscriber("/UAV/" + self.name + "/pose", Pose, callback=self.callback_pose, callback_args=self.name)
         if len(self.neighbor_names) > 0:
             for nm in self.neighbor_names:
-                rospy.Subscriber("/UAV_FW/" + nm + "/pose", Pose, callback=self.callback_pose, callback_args=nm)
-            rospy.Subscriber("/UAV_FW/" + self.name + "/intention_sent", Belief, callback=self.callback_intention_sent)
-            rospy.Subscriber("/UAV_FW/" + self.name + "/intention_received", Belief, callback=self.callback_intention_received)
+                rospy.Subscriber("/UAV/" + nm + "/pose", Pose, callback=self.callback_pose, callback_args=nm)
+            rospy.Subscriber("/UAV/" + self.name + "/intention_sent", Belief, callback=self.callback_intention_sent)
+            rospy.Subscriber("/UAV/" + self.name + "/intention_received", Belief, callback=self.callback_intention_received)
         # Attaching 3D axis to the figure
         fig_num = {"A":0, "B":1, "C":2}
         fig = plt.figure(fig_num[self.name])

@@ -21,6 +21,7 @@ from subprocess import call
 import datetime as dt
 # plt.rcParams['animation.ffmpeg_path'] = '/usr/bin/ffmpeg'
 from dummy_cloud_map.msg import Belief
+import time
 
 
 class Visualization(object):
@@ -33,21 +34,22 @@ class Visualization(object):
         self._intention_received = {}
         self._intention_sent = {}
         self._intention_self = Belief()
+        self._tag = "[viz_{}]".format(name)
 
     def start_node(self):
         rospy.init_node(self.name, log_level=rospy.DEBUG)
         rate = rospy.Rate(1)
         # for nm in self.neighbor_names:
         #     rospy.logdebug("[Visual] {} waiting for {}.".format(self.name, nm))
-        #     rospy.wait_for_message("/UAV_FW/" + nm + "/pose", Pose, timeout=5.)
+        #     rospy.wait_for_message("/UAV/" + nm + "/pose", Pose, timeout=5.)
         rospy.logdebug("Launch Visual Node {} with neighbors {}".format(self.name, self.neighbor_names))
-        rospy.Subscriber("/UAV_FW/" + self.name + "/intention_self", Belief, callback=self.callback_intention_self)
-        rospy.Subscriber("/UAV_FW/" + self.name + "/pose", Pose, callback=self.callback_pose, callback_args=self.name)
+        rospy.Subscriber("/UAV/" + self.name + "/intention_self", Belief, callback=self.callback_intention_self)
+        rospy.Subscriber("/UAV/" + self.name + "/pose", Pose, callback=self.callback_pose, callback_args=self.name)
         if len(self.neighbor_names) > 0:
             for nm in self.neighbor_names:
-                rospy.Subscriber("/UAV_FW/" + nm + "/pose", Pose, callback=self.callback_pose, callback_args=nm)
-            rospy.Subscriber("/UAV_FW/" + self.name + "/intention_sent", Belief, callback=self.callback_intention_sent)
-            rospy.Subscriber("/UAV_FW/" + self.name + "/intention_received", Belief, callback=self.callback_intention_received)
+                rospy.Subscriber("/UAV/" + nm + "/pose", Pose, callback=self.callback_pose, callback_args=nm)
+            rospy.Subscriber("/UAV/" + self.name + "/intention_sent", Belief, callback=self.callback_intention_sent)
+            rospy.Subscriber("/UAV/" + self.name + "/intention_received", Belief, callback=self.callback_intention_received)
         # Attaching 3D axis to the figure
         fig_num = {"A":0, "B":1, "C":2}
         fig = plt.figure(fig_num[self.name])
@@ -80,7 +82,7 @@ class Visualization(object):
         ind = 0
         anims = [None, None, None, None, None]
         anims[ind] = animation.FuncAnimation(
-            fig, self.update_self_viz, 1000, fargs=(unused, ax1self, ax2cax1), interval=50, blit=False)
+            fig, self.update_self_viz, 1000, fargs=(unused, ax1self, ax2cax1), interval=1000, blit=False)
 
         if len(self.neighbor_names) > 0:
             for to_uav, ax_sent, cax in zip(self.neighbor_names, [ax5sent1, ax6sent2], [ax2cax5, ax2cax6]):
@@ -91,7 +93,7 @@ class Visualization(object):
                 #                                      interval=50, blit=False))
                 ind += 1
                 anims[ind] = animation.FuncAnimation(
-                    fig, self.update_sent_viz, 1000, fargs=(unused, ax_sent, to_uav, cax), interval=50, blit=False)
+                    fig, self.update_sent_viz, 1000, fargs=(unused, ax_sent, to_uav, cax), interval=1000, blit=False)
 
             for from_uav, ax_rec, cax in zip(self.neighbor_names, [ax3recv1, ax4recv2], [ax2cax3, ax2cax4]):
                 # anim3 = animation.FuncAnimation(fig, self.update_received_viz, 1000,
@@ -101,7 +103,7 @@ class Visualization(object):
                 #                                      fargs=(unused, ax_rec, from_uav, cax), interval=50, blit=False))
                 ind += 1
                 anims[ind] = animation.FuncAnimation(
-                    fig, self.update_received_viz, 1000, fargs=(unused, ax_rec, from_uav, cax), interval=50, blit=False)
+                    fig, self.update_received_viz, 1000, fargs=(unused, ax_rec, from_uav, cax), interval=1000, blit=False)
 
         plt.suptitle("Robot {}'s Perspective-{}".format(self.name,dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%f")), fontsize=10)
         # plt.subplots_adjust(wspace=0, hspace=0)
@@ -132,18 +134,19 @@ class Visualization(object):
         ax.set_title("{}-joint-#-{}-T1-{}-T0-{}".
                      format(self.name, num, dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%f"),
                             dt.datetime.fromtimestamp(self._intention_self.header.stamp.to_time()).strftime("%M:%S.%f")), fontsize=10)
-        t = np.asanyarray(self._intention_self.data).reshape(self.scale, self.scale)
-        x, y = np.meshgrid(np.arange(0, self.scale, 1.), np.arange(0, self.scale, 1.))
-        ax.text(self.pose[1], self.pose[0], "{}({},{})".format(self.name, self.pose[0], self.pose[1]), fontsize='small')
-        for nm in self.neighbor_names:
-            if self._pose_received.has_key(nm):
-                p2 = self._pose_received[nm]
-                # fix3d not self pose
-                ax.text(p2[1], p2[0], "{}({},{})".format(nm, p2[0], p2[1]), fontsize='small')
+        if len(self._intention_self.data) != 0:
+            t = np.asanyarray(self._intention_self.data).reshape(self.scale, self.scale)
+            x, y = np.meshgrid(np.arange(0, self.scale, 1.), np.arange(0, self.scale, 1.))
+            ax.text(self.pose[1], self.pose[0], "{}({},{})".format(self.name, self.pose[0], self.pose[1]), fontsize='small')
+            for nm in self.neighbor_names:
+                if self._pose_received.has_key(nm):
+                    p2 = self._pose_received[nm]
+                    # fix3d not self pose
+                    ax.text(p2[1], p2[0], "{}({},{})".format(nm, p2[0], p2[1]), fontsize='small')
 
-        p = ax.contour(x, y, t)
-        ax.clabel(p, fontsize=9, inline=1)
-        return p
+            p = ax.contour(x, y, t)
+            ax.clabel(p, fontsize=9, inline=1)
+            return p
 
     def update_sent_viz(self, num, unused_iterable, ax, to_uav, cax):
         """
@@ -264,8 +267,10 @@ def visualizer(name):
             # todo validate the format of n
             if n!= '':
                 viz.neighbor_names.append(n)
+    rospy.logdebug("{} Visual wait for 12 sec...")
+    time.sleep(12)
     viz.start_node()
 
-    print("-----------------------making gifs-----------------------")
-    os.system("sh /home/alien/catkin_ws/src/cloud_map/scripts/gifify.sh")
+    # print("-----------------------making gifs-----------------------")
+    # os.system("sh /home/alien/catkin_ws/src/cloud_map/scripts/gifify.sh")
 

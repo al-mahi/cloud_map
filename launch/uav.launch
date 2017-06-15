@@ -2,14 +2,14 @@
     <!--dimension of the space 2 or 3-->
     <arg name="dim" value="2"/>
     <!--scale of the space-->
-    <arg name="scale" value="50"/>
-    <arg name="As_neighbors" value=""/>
-    <!--<arg name="Bs_neighbors" value="A"/>-->
+    <arg name="scale" value="30"/>
+    <arg name="As_neighbors" value="B"/>
+    <arg name="Bs_neighbors" value="A"/>
     <!--<arg name="Cs_neighbors" value="A"/>-->
     <param name="dim" value="$(arg dim)"/>
     <param name="scale" value="$(arg scale)"/>
-    <group ns="UAV_FW">
-        <node name="A" pkg="dummy_cloud_map" type="uavA.py" respawn="false" output="screen">
+    <group ns="UAV">
+        <node name="A" pkg="cloud_map" type="uavA.py" respawn="false" output="screen">
             <param name="name" value="A"/>
             <param name="temperature" value="true"/>
             <param name="pressure" value="true"/>
@@ -17,26 +17,26 @@
             <!--separate neighbour names by ; If A had B,C neighbour value="B_C"-->
             <param name="neighbors" value="$(arg As_neighbors)"/>
         </node>
-        <!--<node name="B" pkg="dummy_cloud_map" type="uavB.py" respawn="false" output="screen">-->
-            <!--<param name="name" value="B"/>-->
-            <!--<param name="temperature" value="true"/>-->
-            <!--<param name="pressure" value="false"/>-->
-            <!--<param name="humidity" value="true"/>-->
-            <!--<param name="neighbors" value="$(arg Bs_neighbors)"/>-->
-        <!--</node>-->
-        <!--<node name="C" pkg="dummy_cloud_map" type="uavC.py" respawn="false" output="screen">-->
+        <node name="B" pkg="cloud_map" type="uavB.py" respawn="false" output="screen">
+            <param name="name" value="B"/>
+            <param name="temperature" value="true"/>
+            <param name="pressure" value="false"/>
+            <param name="humidity" value="true"/>
+            <param name="neighbors" value="$(arg Bs_neighbors)"/>
+        </node>
+        <!--<node name="C" pkg="cloud_map" type="uavC.py" respawn="false" output="screen">-->
             <!--<param name="name" value="C"/>-->
             <!--<param name="temperature" value="true"/>-->
             <!--<param name="pressure" value="false"/>-->
             <!--<param name="humidity" value="true"/>-->
             <!--<param name="neighbors" value="$(arg Cs_neighbors)"/>-->
         <!--</node>-->
-        <node name="heart_bit_fly" pkg="dummy_cloud_map" type="heart_bit_fly.py" output="screen"></node>
+        <node name="heart_bit_fly" pkg="cloud_map" type="heart_bit_fly.py" output="screen"></node>
     </group>
 
     <group ns="Visual">
         <!--based on the dimension appropriate visualization will be generated-->
-        <node name="A" pkg="dummy_cloud_map" type="visualize_uavA.py" respawn="false" output="screen">
+        <node name="A" pkg="cloud_map" type="visualize_uavA.py" respawn="false" output="screen">
             <param name="name" value="A"/>
             <param name="temperature" value="true"/>
             <param name="pressure" value="true"/>
@@ -44,14 +44,14 @@
             <!--separate neighbour names by _ ; If A had B,C neighbour value="B_C"-->
             <param name="neighbors" value="$(arg As_neighbors)"/>
         </node>
-        <!--<node name="B" pkg="dummy_cloud_map" type="visualize_uavB.py" respawn="false" output="screen">-->
-            <!--<param name="name" value="B"/>-->
-            <!--<param name="temperature" value="true"/>-->
-            <!--<param name="pressure" value="true"/>-->
-            <!--<param name="humidity" value="false"/>-->
-            <!--<param name="neighbors" value="$(arg Bs_neighbors)"/>-->
-        <!--</node>-->
-        <!--<node name="C" pkg="dummy_cloud_map" type="visualize_uavC.py" respawn="false" output="screen">-->
+        <node name="B" pkg="cloud_map" type="visualize_uavB.py" respawn="false" output="screen">
+            <param name="name" value="B"/>
+            <param name="temperature" value="true"/>
+            <param name="pressure" value="true"/>
+            <param name="humidity" value="false"/>
+            <param name="neighbors" value="$(arg Bs_neighbors)"/>
+        </node>
+        <!--<node name="C" pkg="cloud_map" type="visualize_uavC.py" respawn="false" output="screen">-->
             <!--<param name="name" value="C"/>-->
             <!--<param name="temperature" value="true"/>-->
             <!--<param name="pressure" value="true"/>-->
@@ -62,20 +62,32 @@
     </group>
 
     <group ns="PHI">
-        <node name="A" pkg="dummy_cloud_map" type="phiA.py" respawn="false" output="screen">
+        <node name="A" pkg="cloud_map" type="phiA.py" respawn="false" output="screen">
             <param name="name" value="A"/>
             <param name="neighbors" value="$(arg As_neighbors)"/>
             <param name="intent" value="unexplored"/>
         </node>
-        <!--<node name="B" pkg="dummy_cloud_map" type="phiB.py" respawn="false" output="screen">-->
-            <!--<param name="name" value="B"/>-->
-            <!--<param name="neighbors" value="$(arg Bs_neighbors)"/>-->
-            <!--<param name="intent" value="unexplored"/>-->
-        <!--</node>-->
-        <!--<node name="C" pkg="dummy_cloud_map" type="phiC.py" respawn="false" output="screen">-->
+        <node name="B" pkg="cloud_map" type="phiB.py" respawn="false" output="screen">
+            <param name="name" value="B"/>
+            <param name="neighbors" value="$(arg Bs_neighbors)"/>
+            <param name="intent" value="unexplored"/>
+        </node>
+        <!--<node name="C" pkg="cloud_map" type="phiC.py" respawn="false" output="screen">-->
             <!--<param name="name" value="C"/>-->
             <!--<param name="neighbors" value="$(arg Cs_neighbors)"/>-->
             <!--<param name="intent" value="unexplored"/>-->
         <!--</node>-->
+    </group>
+    <group ns="solo">
+        <node name="A" pkg="cloud_map" type="soloA.py" respawn="false" output="screen">
+            <param name="name" value="A"/>
+            <param name="port" value="14555"/>
+        </node>
+    </group>
+    <group ns="solo">
+        <node name="B" pkg="cloud_map" type="soloB.py" respawn="false" output="screen">
+            <param name="name" value="B"/>
+            <param name="port" value="15550"/>
+        </node>
     </group>
 </launch>
