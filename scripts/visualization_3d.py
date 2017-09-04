@@ -79,9 +79,10 @@ class Visualization(object):
         # anims.append(animation.FuncAnimation(
         #     fig, self.update_self_viz, 1000, fargs=(unused, ax1self, ax2cax1), interval=50, blit=False))
         ind = 0
+        interval = 600
         anims = [None, None, None, None, None]
         anims[ind] = animation.FuncAnimation(
-            fig, self.update_self_viz, 1000, fargs=(unused, ax1self, ax2cax1), interval=50, blit=False)
+            fig, self.update_self_viz, 1000, fargs=(unused, ax1self, ax2cax1), interval=interval, blit=False)
 
         if len(self.neighbor_names) > 0:
             for to_uav, ax_sent, cax in zip(self.neighbor_names, [ax5sent1, ax6sent2], [ax2cax5, ax2cax6]):
@@ -92,7 +93,7 @@ class Visualization(object):
                 #                                      interval=50, blit=False))
                 ind += 1
                 anims[ind] = animation.FuncAnimation(
-                    fig, self.update_sent_viz, 1000, fargs=(unused, ax_sent, to_uav, cax), interval=50, blit=False)
+                    fig, self.update_sent_viz, 1000, fargs=(unused, ax_sent, to_uav, cax), interval=interval, blit=False)
 
             for from_uav, ax_rec, cax in zip(self.neighbor_names, [ax3recv1, ax4recv2], [ax2cax3, ax2cax4]):
                 # anim3 = animation.FuncAnimation(fig, self.update_received_viz, 1000,
@@ -102,7 +103,7 @@ class Visualization(object):
                 #                                      fargs=(unused, ax_rec, from_uav, cax), interval=50, blit=False))
                 ind += 1
                 anims[ind] = animation.FuncAnimation(
-                    fig, self.update_received_viz, 1000, fargs=(unused, ax_rec, from_uav, cax), interval=50, blit=False)
+                    fig, self.update_received_viz, 1000, fargs=(unused, ax_rec, from_uav, cax), interval=interval, blit=False)
 
         plt.suptitle("Robot {}'s Perspective".format(self.name))
         # plt.subplots_adjust(wspace=0, hspace=0)
@@ -117,7 +118,7 @@ class Visualization(object):
         :type ax: Axes3D
         :return:
         """
-        if num < 200:
+        if num < 1000:
             plt.savefig("{}/frames{}/{}_{:04d}_joint.png".format(os.path.dirname(__file__), self.name, self.name, num))
         ax.clear()
         # Setting the axes properties

@@ -8,4 +8,4 @@ if __name__ == '__main__':
     name = "B"
     port = int(rospy.get_param("/solo/{}/port".format(name)))
     solo = solo_2d(name=name, port=port)
-    solo.arm_and_takeoff()
+    solo.arm_and_takeoff(start_at_euclid=[14., 4, 5.])

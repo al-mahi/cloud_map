@@ -23,7 +23,7 @@ class dummy_uav(object):
         self._pose = Pose(Point(0., 0., 0.), Quaternion(*quaternion_from_euler(0., 0., 0.)))
         self._vel = Twist(Vector3(1., 0., 0.), Vector3(0., 0., 0.))
         self._stall_vel = 1.0
-        self._defined_intention_keys = ["unexplored"]
+        self._defined_intention_keys = ["unexplored", "tempchange"]
         self._decay_explored = .3
         self._decay_belief = .3
         self._belief = np.ones(shape=self._space) / (scale**self._dim)
@@ -84,6 +84,17 @@ class dummy_uav(object):
             map(lambda x: dist.pdf(np.array(x[:])), indices), dtype=np.float32).reshape(self._space)
         return self._belief
 
+    @property
+    def defined_intention_keys(self):
+        """
+        :rtype : list[str]
+        """
+        return self._defined_intention_keys
+
+    @defined_intention_keys.setter
+    def defined_intention_keys(self, value):
+        self._defined_intention_keys = value
+
     def sum_product_algo2(self):
         """
         Algo 2 is taking sum instead of product.
@@ -108,10 +119,19 @@ class dummy_uav(object):
         new_intention -= self.belief_position
         res = new_intention / np.sum(new_intention)
 
-        X, Y = np.meshgrid(np.arange(0, self._scale, 1.), np.arange(0, self._scale, 1.))
-        wall = (X-self._scale/2)**4 + (Y-self._scale/2)**4
-        wall /= np.sum(wall)
-        wall *= 0.1
+        if self._dim == 2:
+            X, Y = np.meshgrid(np.arange(0, self._scale, 1.), np.arange(0, self._scale, 1.))
+            wall = (X-self._scale/2)**4 + (Y-self._scale/2)**4
+            wall /= np.sum(wall)
+            wall *= 0.05
+
+        if self._dim == 3:
+            # X, Y, Z = np.meshgrid(np.arange(0, self._scale, 1.), np.arange(0, self._scale, 1.), np.arange(0, self._scale, 1.))
+            # wall = (X-self._scale/2)**4. + (Y-self._scale/2)**4. + (Z-self._scale/2)**4.
+            wall = np.zeros(shape=(self._scale, self._scale, self._scale))
+            wall[:, :, 0] = wall[:, 0, :] = wall[0, :, :] = wall[:, :, self._scale-1] = wall[:, self._scale-1, :] = wall[self._scale-1, :, :] = 1.
+            wall /= np.sum(wall)
+            wall *= 0.3
 
         self._intention_fusion = np.array(res.reshape(self._space), dtype=np.float32) + wall
 
@@ -128,26 +148,19 @@ class dummy_uav(object):
             gradient_at_cur_pos = np.array(np.gradient(1.-self._intention_fusion), dtype=np.float32)[:, x, y, z]
 
         k = np.sqrt(np.sum(gradient_at_cur_pos**2.))
-        scaled_grad = gradient_at_cur_pos/k
+        scaled_grad = 1.5 * gradient_at_cur_pos/k
 
         old_pos = self.position
         goal = Pose()
+
         if not np.isclose(k, 0., atol=1.e-12):
-            threshold = 0.1
-            noisy_unit = (3. + np.random.uniform(low=-1., high=1.) * 0.00001)
-            if scaled_grad[0] > (threshold) and self.pose.position.x + noisy_unit < self._scale:
-                goal.position.x = self.pose.position.x + noisy_unit
-            if scaled_grad[1] > (threshold) and self.pose.position.y + noisy_unit < self._scale:
-                goal.position.y = self.pose.position.y + noisy_unit
-            if scaled_grad[0] < (-1.*threshold) and self.pose.position.x > noisy_unit - 1.:
-                goal.position.x = self.pose.position.x - noisy_unit
-            if scaled_grad[1] < (-1.*threshold) and self.pose.position.y > noisy_unit - 1.:
-                goal.position.y = self.pose.position.y - noisy_unit
+            if 0. <= self.pose.position.x + scaled_grad[0] < self._scale - 1.:
+                goal.position.x = self.pose.position.x + scaled_grad[0]
+            if 0. <= self.pose.position.y + scaled_grad[1] < self._scale - 1.:
+                goal.position.y = self.pose.position.y + scaled_grad[1]
             if self._dim == 3:
-                if scaled_grad[2] > (threshold) and self.pose.position.z + noisy_unit < self._scale:
-                    goal.position.z = self.pose.position.z + noisy_unit
-                if scaled_grad[2] < (-1.*threshold) and self.pose.position.z > noisy_unit - 1:
-                    goal.position.z = self.pose.position.z - noisy_unit
+                if 0. <= self.pose.position.z + scaled_grad[2] < self._scale - 1.:
+                    goal.position.z = self.pose.position.z + scaled_grad[2]
 
         # rospy.logdebug("{}:occupancy\n{}".format(self.name, self._intention_fusion))
         rospy.logdebug("[{}]{}:{}->{} grad {}|{} 0?{}".format(dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%f"), self.name, old_pos, np.array([goal.position.x, goal.position.y, goal.position.z]), gradient_at_cur_pos, scaled_grad, np.isclose(k, 0.)))
@@ -182,15 +195,24 @@ class dummy_uav(object):
         # :type pdf_unexplored: Belief
         self._phi["unexplored"] = np.asanyarray(pdf_unexplored.data, dtype=np.float32).reshape(self._space)
 
-    def take_off(self, start_at):
+    def callback_phi_temp_change(self, pdf_unexplored):
+        # :type pdf_unexplored: Belief
+        self._phi["tempchange"] = np.asanyarray(pdf_unexplored.data, dtype=np.float32).reshape(self._space)
+
+    def take_off(self):
         """
         uav rosnode launcher and intention publisher
         """
+
+        choice = raw_input("Start autonomous node? Press any letter").lower()
+        print("choice = ", choice)
+        print("Starting autonomouse mode......")
         rospy.init_node(self._name, log_level=rospy.DEBUG)
         rate = rospy.Rate(2)
         rospy.Subscriber("/solo/{}/pose_euclid".format(self._name), Pose, callback=self.callback_sensor_pose)
         rospy.Subscriber("/solo/{}/distance_from_goal".format(self._name), Float32, callback=self.callback_goal_reached)
         rospy.Subscriber("/PHI/{}/unexplored".format(self.name), numpy_msg(Belief), callback=self.callback_phi_unexplored)
+        rospy.Subscriber("/PHI/{}/temp_change".format(self.name), numpy_msg(Belief), callback=self.callback_phi_temp_change)
         for from_uav in self.neighbour_names:
             topic = "/UAV/" + from_uav + "/intention_sent"
             rospy.Subscriber(topic, Belief, callback=self.callback)
@@ -200,11 +222,6 @@ class dummy_uav(object):
             init_belief.header.stamp = rospy.Time.now()
             init_belief.data = np.ones(self._scale ** self._dim, dtype=np.float32).ravel()
             self._msg_received[from_uav] = init_belief
-        self._pose = Pose(Point(start_at[0], start_at[1], start_at[2]), Quaternion(*quaternion_from_euler(0., 0., np.pi)))
-
-        time.sleep(15)
-        rospy.logdebug("{} sending to inital goal (x,y)=({}, {})!!!".format(self.name, self._pose.position.x, self._pose.position.y))
-        self._pub_goal_euclid.publish(self._pose)
 
         q_size = 10
         # fix3d
@@ -240,11 +257,12 @@ class dummy_uav(object):
             rate.sleep()
 
 
-def launch_uav(name,start_at):
+def launch_uav(name):
     # default scale 2 will be overwritten by rosparam space
     dim = int(rospy.get_param("/dim"))
     scale = int(rospy.get_param("/scale"))
     uav = dummy_uav(name=name, dim=dim, scale=scale)
+    uav.defined_intention_keys = rospy.get_param("/PHI/" + name + "/intent").split('_')
 
     neighbors = []
     if rospy.has_param("/UAV/" + name + "/neighbors"):
@@ -255,4 +273,4 @@ def launch_uav(name,start_at):
             uav.neighbour_names.append(n)
 
     print("UAV_2D launcing {} with neighbors {}".format(name, neighbors))
-    uav.take_off(start_at=start_at)
+    uav.take_off()

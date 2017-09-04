@@ -80,9 +80,10 @@ class Visualization(object):
         # anims.append(animation.FuncAnimation(
         #     fig, self.update_self_viz, 1000, fargs=(unused, ax1self, ax2cax1), interval=50, blit=False))
         ind = 0
+        interval = 500
         anims = [None, None, None, None, None]
         anims[ind] = animation.FuncAnimation(
-            fig, self.update_self_viz, 1000, fargs=(unused, ax1self, ax2cax1), interval=1000, blit=False)
+            fig, self.update_self_viz, 1000, fargs=(unused, ax1self, ax2cax1), interval=interval, blit=False)
 
         if len(self.neighbor_names) > 0:
             for to_uav, ax_sent, cax in zip(self.neighbor_names, [ax5sent1, ax6sent2], [ax2cax5, ax2cax6]):
@@ -93,7 +94,7 @@ class Visualization(object):
                 #                                      interval=50, blit=False))
                 ind += 1
                 anims[ind] = animation.FuncAnimation(
-                    fig, self.update_sent_viz, 1000, fargs=(unused, ax_sent, to_uav, cax), interval=1000, blit=False)
+                    fig, self.update_sent_viz, 1000, fargs=(unused, ax_sent, to_uav, cax), interval=interval, blit=False)
 
             for from_uav, ax_rec, cax in zip(self.neighbor_names, [ax3recv1, ax4recv2], [ax2cax3, ax2cax4]):
                 # anim3 = animation.FuncAnimation(fig, self.update_received_viz, 1000,
@@ -103,7 +104,7 @@ class Visualization(object):
                 #                                      fargs=(unused, ax_rec, from_uav, cax), interval=50, blit=False))
                 ind += 1
                 anims[ind] = animation.FuncAnimation(
-                    fig, self.update_received_viz, 1000, fargs=(unused, ax_rec, from_uav, cax), interval=1000, blit=False)
+                    fig, self.update_received_viz, 1000, fargs=(unused, ax_rec, from_uav, cax), interval=interval, blit=False)
 
         plt.suptitle("Robot {}'s Perspective-{}".format(self.name,dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%f")), fontsize=10)
         # plt.subplots_adjust(wspace=0, hspace=0)
@@ -123,10 +124,10 @@ class Visualization(object):
         ax.clear()
         # Setting the axes properties
         ax.set_xlim([0.0, float(self.scale)])
-        ax.set_xlabel('X')
+        ax.set_xlabel('Y')
 
         ax.set_ylim([0.0, float(self.scale)])
-        ax.set_ylabel('Y')
+        ax.set_ylabel('X')
 
         ax.set_xticks([])
         ax.set_yticks([])
@@ -194,10 +195,10 @@ class Visualization(object):
         ax.clear()
         # Setting the axes properties
         ax.set_xlim([0.0, float(self.scale)])
-        ax.set_xlabel('X')
+        ax.set_xlabel('Y')
 
         ax.set_ylim([0.0, float(self.scale)])
-        ax.set_ylabel('Y')
+        ax.set_ylabel('X')
 
         ax.set_xticks([])
         ax.set_yticks([])
@@ -207,8 +208,8 @@ class Visualization(object):
         ax.text(self.pose[1], self.pose[0], self.name)
         for nm in self.neighbor_names:
             if self._pose_received.has_key(nm):
-                p3 = self._pose_received[nm]
-                ax.text(p3[1], p3[0], nm)
+                p2 = self._pose_received[nm]
+                ax.text(p2[1], p2[0], nm)
 
         if self._intention_received.has_key(from_uav):
             ax.set_title("{}<{}#{}-T1-{}-T0-{}".format(self.name, from_uav, num,dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%f"),
@@ -235,29 +236,29 @@ class Visualization(object):
         :type pdf_intention: Belief
         """
         # tmp = np.asanyarray(pdf_intention.data).reshape(self.scale, self.scale)
-        self._intention_sent[pdf_intention.header.frame_id[2]] = pdf_intention #tmp
+        self._intention_sent[pdf_intention.header.frame_id[2]] = pdf_intention  # tmp
 
     def callback_intention_received(self, pdf_intention):
         """
         :type pdf_intention: Belief
         """
         # tmp = np.asanyarray(pdf_intention.data).reshape(self.scale, self.scale)
-        self._intention_received[pdf_intention.header.frame_id] = pdf_intention #tmp
+        self._intention_received[pdf_intention.header.frame_id] = pdf_intention  # tmp
 
     def callback_intention_self(self, pdf_intention):
         """
         :type pdf_intention: Belief
         """
         # tmp = np.asanyarray(pdf_intention.data).reshape(self.scale, self.scale)
-        self._intention_self = pdf_intention #tmp
+        self._intention_self = pdf_intention  # tmp
 
 
 def visualizer(name):
     # delete previous output plots
     cmd = "rm /home/alien/catkin_ws/src/cloud_map/scripts/frames{}/*".format(name)
     os.system(cmd)
-    cmd = "rm /home/alien/catkin_ws/src/cloud_map/scripts/gifs/*".format(name)
-    os.system(cmd)
+    # cmd = "rm /home/alien/catkin_ws/src/cloud_map/scripts/gifs/*".format(name)
+    # os.system(cmd)
     # default scale 2 will be overwritten by rosparam space
     scale = int(rospy.get_param("/scale"))
     viz = Visualization(name=name, d=scale)
@@ -265,7 +266,7 @@ def visualizer(name):
         neighbours = rospy.get_param("/Visual/" + name + "/neighbors").split("_")
         for n in neighbours:
             # todo validate the format of n
-            if n!= '':
+            if n != '':
                 viz.neighbor_names.append(n)
     rospy.logdebug("{} Visual wait for 12 sec...")
     time.sleep(12)
