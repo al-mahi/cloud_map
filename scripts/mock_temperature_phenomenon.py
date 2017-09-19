@@ -11,20 +11,28 @@ from std_msgs.msg import String, Float32
 
 
 class MockTemperature(object):
-    def __init__(self, scale=20):
+    def __init__(self, scale=20, dim=2):
         self._scale = scale
-        self._true_tmp = np.zeros((self._scale, self._scale, self._scale))
+        self._dim = dim
+        self._space = tuple([scale for _ in range(dim)])
+        self._true_tmp = np.zeros(self._space)
         self._pose_A = Pose()
         self._pose_B = Pose()
         self._pose_C = Pose()
         self.ground_tmp = 90.  # F
         self.above_tmp = 70.  # F
         self.del_tmp = (self.ground_tmp - self.above_tmp)/self._scale
+        if self._dim == 3:
+            for i in range(int(scale)):
+                self._true_tmp[:, :, i] = self.ground_tmp - i * self.del_tmp
+            self._true_tmp[:, :, int((self._scale/2)-1):int((self._scale/2)+1)] -= 4.
+            self._true_tmp[:, :, int((self._scale/2))] -= 8.
 
-        for i in range(int(scale)):
-            self._true_tmp[:, :, i] = self.ground_tmp - i * self.del_tmp
-        self._true_tmp[:, :, 10:13] -= 4.
-        self._true_tmp[:, :, 11] -= 8.
+        if self._dim == 2:
+            for i in range(int(scale)):
+                self._true_tmp[:, i] = self.ground_tmp - i * self.del_tmp
+            self._true_tmp[:, 10:14] -= 2.
+            self._true_tmp[:, 11:12] -= 4.
 
     @property
     def true_tmp(self):
@@ -52,13 +60,18 @@ class MockTemperature(object):
         pub_C = rospy.Publisher("C/mock_temperature", data_class=Float32, queue_size=10)
 
         while not rospy.is_shutdown():
-            xA, yA, zA = map(int, np.array(self._pose_A.position.__getstate__())[:])
-            xB, yB, zB = map(int, np.array(self._pose_B.position.__getstate__())[:])
-            xC, yC, zC = map(int, np.array(self._pose_C.position.__getstate__())[:])
-            print("psoe & temp", xA, yA, zA, self._true_tmp[xA, yA, zA])
-            pub_A.publish(self._true_tmp[xA, yA, zA])
-            pub_B.publish(self._true_tmp[xB, yB, zB])
-            pub_C.publish(self._true_tmp[xC, yC, zC])
+            xA, yA, zA = map(int, map(round, np.array(self._pose_A.position.__getstate__())[:]))
+            xB, yB, zB = map(int, map(round, np.array(self._pose_B.position.__getstate__())[:]))
+            xC, yC, zC = map(int, map(round, np.array(self._pose_C.position.__getstate__())[:]))
+            # print("pose & temp", xA, yA, zA, self._true_tmp[xA, yA, zA])
+            if self._dim == 3:
+                pub_A.publish(self._true_tmp[xA, yA, zA])
+                pub_B.publish(self._true_tmp[xB, yB, zB])
+                pub_C.publish(self._true_tmp[xC, yC, zC])
+            if self._dim == 2:
+                pub_A.publish(self._true_tmp[xA, yA])
+                pub_B.publish(self._true_tmp[xB, yB])
+                pub_C.publish(self._true_tmp[xC, yC])
             rate.sleep()
 
     def plot_static(self):
@@ -81,9 +94,11 @@ class MockTemperature(object):
 
 if __name__ == "__main__":
     scale = 20
+    dim = 2
     print("Mocking temperature sensor")
     if rospy.has_param("/scale"): scale = int(rospy.get_param("/scale"))
-    profile = MockTemperature(scale)
+    if rospy.has_param("/dim"): scale = int(rospy.get_param("/scale"))
+    profile = MockTemperature(scale, dim)
     profile.cast_temperature()
     # profile.plot_static()
 

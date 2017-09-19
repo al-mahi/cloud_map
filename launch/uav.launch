@@ -1,34 +1,26 @@
 <launch>
     <!--dimension of the space 2 or 3-->
-    <arg name="dim" value="3"/>
+    <arg name="dim" value="2"/>
     <!--scale of the space-->
-    <arg name="scale" value="25"/>
-    <arg name="As_neighbors" value="A"/>
+    <arg name="scale" value="16"/>
+    <arg name="As_neighbors" value="B"/>
     <arg name="Bs_neighbors" value="A"/>
+    <arg name="Cs_neighbors" value="A"/>
     <!--<arg name="Cs_neighbors" value="A"/>-->
     <param name="dim" value="$(arg dim)"/>
     <param name="scale" value="$(arg scale)"/>
     <group ns="UAV">
         <node name="A" pkg="cloud_map" type="uavA.py" respawn="false" output="screen">
             <param name="name" value="A"/>
-            <param name="temperature" value="true"/>
-            <param name="pressure" value="true"/>
-            <param name="humidity" value="false"/>
             <!--separate neighbour names by ; If A had B,C neighbour value="B_C"-->
             <param name="neighbors" value="$(arg As_neighbors)"/>
         </node>
-        <!--<node name="B" pkg="cloud_map" type="uavB.py" respawn="false" output="screen">-->
-            <!--<param name="name" value="B"/>-->
-            <!--<param name="temperature" value="true"/>-->
-            <!--<param name="pressure" value="false"/>-->
-            <!--<param name="humidity" value="true"/>-->
-            <!--<param name="neighbors" value="$(arg Bs_neighbors)"/>-->
-        <!--</node>-->
+        <node name="B" pkg="cloud_map" type="uavB.py" respawn="false" output="screen">
+            <param name="name" value="B"/>
+            <param name="neighbors" value="$(arg Bs_neighbors)"/>
+        </node>
         <!--<node name="C" pkg="cloud_map" type="uavC.py" respawn="false" output="screen">-->
             <!--<param name="name" value="C"/>-->
-            <!--<param name="temperature" value="true"/>-->
-            <!--<param name="pressure" value="false"/>-->
-            <!--<param name="humidity" value="true"/>-->
             <!--<param name="neighbors" value="$(arg Cs_neighbors)"/>-->
         <!--</node>-->
         <node name="heart_bit_fly" pkg="cloud_map" type="heart_bit_fly.py" output="screen"></node>
@@ -38,24 +30,15 @@
         <!--based on the dimension appropriate visualization will be generated-->
         <node name="A" pkg="cloud_map" type="visualize_uavA.py" respawn="false" output="screen">
             <param name="name" value="A"/>
-            <param name="temperature" value="true"/>
-            <param name="pressure" value="true"/>
-            <param name="humidity" value="false"/>
             <!--separate neighbour names by _ ; If A had B,C neighbour value="B_C"-->
             <param name="neighbors" value="$(arg As_neighbors)"/>
         </node>
-        <!--<node name="B" pkg="cloud_map" type="visualize_uavB.py" respawn="false" output="screen">-->
-            <!--<param name="name" value="B"/>-->
-            <!--<param name="temperature" value="true"/>-->
-            <!--<param name="pressure" value="true"/>-->
-            <!--<param name="humidity" value="false"/>-->
-            <!--<param name="neighbors" value="$(arg Bs_neighbors)"/>-->
-        <!--</node>-->
+        <node name="B" pkg="cloud_map" type="visualize_uavB.py" respawn="false" output="screen">
+            <param name="name" value="B"/>
+            <param name="neighbors" value="$(arg Bs_neighbors)"/>
+        </node>
         <!--<node name="C" pkg="cloud_map" type="visualize_uavC.py" respawn="false" output="screen">-->
             <!--<param name="name" value="C"/>-->
-            <!--<param name="temperature" value="true"/>-->
-            <!--<param name="pressure" value="true"/>-->
-            <!--<param name="humidity" value="false"/>-->
             <!--&lt;!&ndash;separate neighbour names by _ ; If A had B,C neighbour value="B_C"&ndash;&gt;-->
             <!--<param name="neighbors" value="$(arg Cs_neighbors)"/>-->
         <!--</node>-->
@@ -66,28 +49,73 @@
             <param name="name" value="A"/>
             <param name="neighbors" value="$(arg As_neighbors)"/>
             <!--separate by underscore token-->
-            <param name="intent" value="unexplored_temperaturechange"/>
+            <param name="intent" value="unexplored_tempchange_boundary_avoidcollision"/>
         </node>
-        <!--<node name="B" pkg="cloud_map" type="phiB.py" respawn="false" output="screen">-->
+        <node name="A_temp_change" pkg="cloud_map" type="phiA_temp_change.py" respawn="false" output="screen">
+            <param name="name" value="A"/>
+            <param name="neighbors" value="$(arg As_neighbors)"/>
+            <!--separate by underscore token-->
+            <param name="intent" value="unexplored_tempchange_boundary_avoidcollision"/>
+        </node>
+        <node name="A_avoid_collision" pkg="cloud_map" type="phiA_avoid_collision.py" respawn="false" output="screen">
+            <param name="name" value="A"/>
+            <param name="neighbors" value="$(arg As_neighbors)"/>
+            <!--separate by underscore token-->
+            <param name="intent" value="unexplored_tempchange_boundary_avoidcollision"/>
+        </node>
+        <node name="B" pkg="cloud_map" type="phiB.py" respawn="false" output="screen">
+            <param name="name" value="B"/>
+            <param name="neighbors" value="$(arg Bs_neighbors)"/>
+            <!--separate by underscore token-->
+            <param name="intent" value="unexplored_tempchange_boundary_avoidcollision_humaninteresting_humanannoying"/>
+        </node>
+        <!--<node name="B_temp_change" pkg="dummy_cloud_map" type="phiB_temp_change.py" respawn="false" output="screen">-->
             <!--<param name="name" value="B"/>-->
             <!--<param name="neighbors" value="$(arg Bs_neighbors)"/>-->
-            <!--<param name="intent" value="unexplored"/>-->
+            <!--&lt;!&ndash;separate by underscore token&ndash;&gt;-->
+            <!--<param name="intent" value="unexplored_tempchange_boundary_avoidcollision"/>-->
         <!--</node>-->
-        <!--<node name="C" pkg="cloud_map" type="phiC.py" respawn="false" output="screen">-->
+        <node name="B_avoid_collision" pkg="cloud_map" type="phiB_avoid_collision.py" respawn="false" output="screen">
+            <param name="name" value="B"/>
+            <param name="neighbors" value="$(arg Bs_neighbors)"/>
+            <!--separate by underscore token-->
+            <param name="intent" value="unexplored_tempchange_boundary_avoidcollision_humaninteresting_humanannoying"/>
+        </node>
+        <node name="B_human_intention" pkg="cloud_map" type="phiB_human_intention.py" respawn="false" output="screen">
+            <param name="name" value="B"/>
+            <param name="neighbors" value="$(arg Bs_neighbors)"/>
+            <!--separate by underscore token-->
+            <param name="intent" value="unexplored_tempchange_boundary_avoidcollision_humaninteresting_humanannoying"/>
+        </node>
+        <!--<node name="C" pkg="dummy_cloud_map" type="phiC.py" respawn="false" output="screen">-->
             <!--<param name="name" value="C"/>-->
             <!--<param name="neighbors" value="$(arg Cs_neighbors)"/>-->
-            <!--<param name="intent" value="unexplored"/>-->
+            <!--&lt;!&ndash;separate by underscore token&ndash;&gt;-->
+            <!--<param name="intent" value="unexplored_tempchange_boundary_avoidcollision"/>-->
+        <!--</node>-->
+        <!--<node name="C_temp_change" pkg="dummy_cloud_map" type="phiC_temp_change.py" respawn="false" output="screen">-->
+            <!--<param name="name" value="C"/>-->
+            <!--<param name="neighbors" value="$(arg Cs_neighbors)"/>-->
+            <!--&lt;!&ndash;separate by underscore token&ndash;&gt;-->
+            <!--<param name="intent" value="unexplored_tempchange_boundary_avoidcollision"/>-->
+        <!--</node>-->
+        <!--<node name="C_avoid_collision" pkg="dummy_cloud_map" type="phiC_avoid_collision.py" respawn="false" output="screen">-->
+            <!--<param name="name" value="C"/>-->
+            <!--<param name="neighbors" value="$(arg Cs_neighbors)"/>-->
+            <!--&lt;!&ndash;separate by underscore token&ndash;&gt;-->
+            <!--<param name="intent" value="unexplored_tempchange_boundary_avoidcollision"/>-->
         <!--</node>-->
     </group>
+
     <group ns="solo">
         <node name="A" pkg="cloud_map" type="soloA.py" respawn="false" output="screen">
             <param name="name" value="A"/>
             <param name="port" value="14555"/>
         </node>
-        <!--<node name="B" pkg="cloud_map" type="soloB.py" respawn="false" output="screen">-->
-            <!--<param name="name" value="B"/>-->
-            <!--<param name="port" value="15550"/>-->
-        <!--</node>-->
+        <node name="B" pkg="cloud_map" type="soloB.py" respawn="false" output="screen">
+            <param name="name" value="B"/>
+            <param name="port" value="15550"/>
+        </node>
     </group>
 
     <group ns="Sensors">

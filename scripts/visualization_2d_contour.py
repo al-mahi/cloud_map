@@ -72,8 +72,6 @@ class Visualization(object):
 
         # Creating the Animation object
         # Contains plots for the 5  that I am plotting joint, A->B, A<-B, A->C, A<-C
-
-
         # anim1 = animation.FuncAnimation(fig, self.update_self_viz, 1000, fargs=(unused, ax1self, ax2cax1), interval=50, blit=False)
         # anim1.save("{}_movie.gif".format(self.name), writer='imagemagick')
         # anims = []
@@ -123,10 +121,18 @@ class Visualization(object):
             plt.savefig("{}/frames{}/{}_{:04d}_joint.png".format(os.path.dirname(__file__), self.name, self.name, num))
         ax.clear()
         # Setting the axes properties
-        ax.set_xlim([0.0, float(self.scale)])
+        try:
+            ax.set_xlim([0.0, float(self.scale)])
+        except ValueError:
+            pass
+
         ax.set_xlabel('Y')
 
-        ax.set_ylim([0.0, float(self.scale)])
+        try:
+            ax.set_ylim([0.0, float(self.scale)])
+        except ValueError:
+            pass
+
         ax.set_ylabel('X')
 
         ax.set_xticks([])
@@ -135,6 +141,7 @@ class Visualization(object):
         ax.set_title("{}-joint-#-{}-T1-{}-T0-{}".
                      format(self.name, num, dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%f"),
                             dt.datetime.fromtimestamp(self._intention_self.header.stamp.to_time()).strftime("%M:%S.%f")), fontsize=10)
+        # ax.set_title("{}-joint-#-{}".format(self.name, num), fontsize=10)
         if len(self._intention_self.data) != 0:
             t = np.asanyarray(self._intention_self.data).reshape(self.scale, self.scale)
             x, y = np.meshgrid(np.arange(0, self.scale, 1.), np.arange(0, self.scale, 1.))
@@ -145,8 +152,10 @@ class Visualization(object):
                     # fix3d not self pose
                     ax.text(p2[1], p2[0], "{}({},{})".format(nm, p2[0], p2[1]), fontsize='small')
 
-            p = ax.contour(x, y, t)
-            ax.clabel(p, fontsize=9, inline=1)
+            # p = ax.contour(x, y, t)
+            p = ax.imshow(t, cmap='hot', interpolation='nearest')
+            # ax.clabel(p, fontsize=9, inline=1)
+            cb = plt.colorbar(p, cax=cax)
             return p
 
     def update_sent_viz(self, num, unused_iterable, ax, to_uav, cax):
@@ -158,7 +167,10 @@ class Visualization(object):
         """
         ax.clear()
         # Setting the axes properties
-        ax.set_xlim([0.0, float(self.scale)])
+        try:
+            ax.set_xlim([0.0, float(self.scale)])
+        except ValueError:  #raised if `y` is empty.
+            pass
         # ax.set_xlabel('X')
 
         ax.set_ylim([0.0, float(self.scale)])
@@ -175,9 +187,12 @@ class Visualization(object):
         if self._intention_sent.has_key(to_uav):
             ax.set_title("{}>{}#{}-T1-{}-T0-{}".format(self.name, to_uav, num,dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%f"),
                                                        dt.datetime.fromtimestamp(self._intention_sent[to_uav].header.stamp.to_time()).strftime("%M:%S.%f")), fontsize=10)
+            ax.set_title("{}>{}#{}".format(self.name, to_uav, num), fontsize=10)
             t = np.asanyarray(self._intention_sent[to_uav].data).reshape(self.scale, self.scale)
             x, y = np.meshgrid(np.arange(0, self.scale, 1.), np.arange(0, self.scale, 1.))
-            p = ax.contour(x, y, t, 6,colors='k')
+            # p = ax.contour(x, y, t)
+            p = ax.imshow(t, cmap='hot', interpolation='nearest')
+            cb = plt.colorbar(p, cax=cax)
             return p
         else:
             print("No update sent to {}".format(to_uav))
@@ -194,10 +209,16 @@ class Visualization(object):
         #     plt.savefig("{}/frames{}/{}_from_{}_{:04d}.png.png".format(os.path.dirname(__file__), self.name, self.name, from_uav, num))
         ax.clear()
         # Setting the axes properties
-        ax.set_xlim([0.0, float(self.scale)])
+        try:
+            ax.set_xlim([0.0, float(self.scale)])
+        except ValueError:
+            pass
         ax.set_xlabel('Y')
 
-        ax.set_ylim([0.0, float(self.scale)])
+        try:
+            ax.set_ylim([0.0, float(self.scale)])
+        except ValueError:
+            pass
         ax.set_ylabel('X')
 
         ax.set_xticks([])
@@ -212,11 +233,15 @@ class Visualization(object):
                 ax.text(p2[1], p2[0], nm)
 
         if self._intention_received.has_key(from_uav):
-            ax.set_title("{}<{}#{}-T1-{}-T0-{}".format(self.name, from_uav, num,dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%f"),
-                                                       dt.datetime.fromtimestamp(self._intention_received[from_uav].header.stamp.to_time()).strftime("%M:%S.%f")), fontsize=10)
+            # ax.set_title("{}<{}#{}-T1-{}-T0-{}".format(self.name, from_uav, num,dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%f"),
+            #                                            dt.datetime.fromtimestamp(self._intention_received[from_uav].header.stamp.to_time()).strftime("%M:%S.%f")), fontsize=10)
+            ax.set_title("{}<{}#{}".format(self.name, from_uav, num), fontsize=10)
             t = np.asanyarray(self._intention_received[from_uav].data).reshape(self.scale, self.scale)
             x, y = np.meshgrid(np.arange(0, self.scale, 1.), np.arange(0, self.scale, 1.))
-            p = ax.contour(x, y, t, 6,colors='k')
+            # p = ax.contour(x, y, t)
+            p = ax.imshow(t, cmap='hot', interpolation='nearest')
+            # Add a color bar which maps values to colors.
+            cb = plt.colorbar(p, cax=cax)
             return p
         else:
             print("no update received from {}!".format(from_uav))
@@ -271,7 +296,3 @@ def visualizer(name):
     rospy.logdebug("{} Visual wait for 12 sec...")
     time.sleep(12)
     viz.start_node()
-
-    # print("-----------------------making gifs-----------------------")
-    # os.system("sh /home/alien/catkin_ws/src/cloud_map/scripts/gifify.sh")
-
