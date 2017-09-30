@@ -112,7 +112,7 @@ class dummy_uav(object):
                 neighbors_belief += np.asanyarray(self._msg_received[v].data, dtype=np.float32).reshape(self._space)
 
         intention_weight = {
-            "unexplored": .2, "tempchange": .6, "avoidcollision": .8, "boundary": 1., "humaninteresting": .8, "humanannoying": 0.9
+            "unexplored": .2, "tempchange": .7, "avoidcollision": .8, "boundary": 1., "humaninteresting": .8, "humanannoying": 0.9
         }
 
         if self._dim == 2:
@@ -204,10 +204,10 @@ class dummy_uav(object):
                     valid_move = False
                     rospy.logdebug("[{}]{} Pushing out! grad={}".format(dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%f"), self.name, gradient_at_cur_pos))
                     if grad_norm[i] > 0.:
-                        grad_norm[i] = 0. #np.random.uniform(-1., 0.)
+                        grad_norm[i] = 0.
                     if grad_norm[i] < 0.:
-                        grad_norm[i] = 0 #np.random.uniform(0., 1.)
-            if np.sum(np.abs(grad_norm)) > 1.e-8: grad_norm /= np.sum(grad_norm)
+                        grad_norm[i] = 0
+            if np.sum(np.abs(grad_norm)) > 1.e-8: grad_norm /= np.sum(np.abs(grad_norm))
             if valid_move: break
 
         self.pose.position.x = new_pos[0]

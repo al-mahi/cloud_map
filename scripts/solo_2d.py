@@ -27,22 +27,33 @@ class solo_2d(object):
         self._dim = int(rospy.get_param("/dim"))
         self._scale = int(rospy.get_param("/scale"))
         # cowboy cricket ground bowling end 36.133642, -97.076528
-        # self._origin_lat = 36.133642
-        # self._origin_lon = -97.076528
-        # # campus
-        # self._origin_lat = 36.1214838
-        # self._origin_lon = -97.0698584
-        # UAFS site corner 36.1620828,-96.8358856
-        self._origin_lat = 36.1620828
-        self._origin_lon = -96.8358856
+        self._origin_lat = 36.133450
+        self._origin_lon = -97.076666
+
         self._log_file = open("log_poses_{}_{}.txt".format(self._tag, time.time()), mode='a+')
         self._origin_alt = 10.  # meter
+        if name == 'A':
+            self._origin_alt = 12.  # meter
         self._goal_alt = 20
         self._meters_per_alt = 1.
-        self._meters_per_disposition = 2.5
+        self._meters_per_disposition = 4.
         self._meters_per_lat = 110961.03  # meters per degree of latitude for use near Stillwater
         self._meters_per_lon = 90037.25  # meters per degree of longitude
 
+        self.gps_grid = np.empty(shape=self._space, dtype=(float, 3))
+
+        max_lon = self._origin_lon + (self._meters_per_disposition * self._scale) / self._meters_per_lon
+        max_lat = self._origin_lat + (self._meters_per_disposition * self._scale) / self._meters_per_lat
+        max_alt = self._origin_alt + (self._meters_per_disposition * self._scale) / self._meters_per_alt
+
+        lon_x = np.linspace(self._origin_lon, max_lon, self._scale)
+        lat_y = np.linspace(self._origin_lat, max_lat, self._scale)
+        alt_z = np.linspace(self._origin_alt, max_alt, self._scale)
+
+        for x in range(self._scale):
+            for y in range(self._scale):
+                for z in range(self._scale):
+                    self.gps_grid[x, y, z] = np.array([lon_x[x], lat_y[y], alt_z[z]])
         try:
             self._vehicle = dronekit.connect("udpin:0.0.0.0:{}".format(port))
         except Exception as e:
@@ -147,7 +158,8 @@ class solo_2d(object):
         self._log_file.write("{}_{}_ {},{},{} {},{},{}\n".format(self._tag, rospy.Time.now(), self._vehicle.location.global_relative_frame.lon,
                                                       self._vehicle.location.global_relative_frame.lat,
                                                       self._vehicle.location.global_relative_frame.alt, pose.position.x, pose.position.y, pose.position.z))
-        if pose.position.x < -1. or pose.position.y < -1 or pose.position.x > self._scale or pose.position.y > self._scale:
+
+        if pose.position.x < -1. or pose.position.y < -1. or pose.position.x >= self._scale or pose.position.y >= self._scale:
             rospy.logdebug("{} landing because went out of boundary!!! ".format(self._tag))
             self._vehicle.mode = dronekit.VehicleMode("LAND")
         return pose
