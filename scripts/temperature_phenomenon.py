@@ -51,27 +51,25 @@ class MockTemperature(object):
 
     def cast_temperature(self):
         rospy.init_node("Sensors")
-        rate = rospy.Rate(1)
-        rospy.Subscriber("/solo/A/pose_euclid", Pose, callback=self.callback_sensor_pose_A)
-        rospy.Subscriber("/solo/B/pose_euclid", Pose, callback=self.callback_sensor_pose_B)
-        rospy.Subscriber("/solo/C/pose_euclid", Pose, callback=self.callback_sensor_pose_C)
+        rate = rospy.Rate(2)
+        rospy.Subscriber("/UAV_FW/A/pose", Pose, callback=self.callback_sensor_pose_A)
+        rospy.Subscriber("/UAV_FW/B/pose", Pose, callback=self.callback_sensor_pose_B)
+        rospy.Subscriber("/UAV_FW/C/pose", Pose, callback=self.callback_sensor_pose_C)
         pub_A = rospy.Publisher("A/mock_temperature", data_class=Float32, queue_size=10)
         pub_B = rospy.Publisher("B/mock_temperature", data_class=Float32, queue_size=10)
         pub_C = rospy.Publisher("C/mock_temperature", data_class=Float32, queue_size=10)
-
         while not rospy.is_shutdown():
             xA, yA, zA = map(int, map(round, np.array(self._pose_A.position.__getstate__())[:]))
             xB, yB, zB = map(int, map(round, np.array(self._pose_B.position.__getstate__())[:]))
             xC, yC, zC = map(int, map(round, np.array(self._pose_C.position.__getstate__())[:]))
-            # print("pose & temp", xA, yA, zA, self._true_tmp[xA, yA, zA])
             if self._dim == 3:
-                pub_A.publish(self._true_tmp[xA, yA, zA])
-                pub_B.publish(self._true_tmp[xB, yB, zB])
-                pub_C.publish(self._true_tmp[xC, yC, zC])
+                pub_A.publish(self._true_tmp[yA, xA, zA])
+                pub_B.publish(self._true_tmp[yB, xB, zB])
+                pub_C.publish(self._true_tmp[yC, xC, zC])
             if self._dim == 2:
-                pub_A.publish(self._true_tmp[xA, yA])
-                pub_B.publish(self._true_tmp[xB, yB])
-                pub_C.publish(self._true_tmp[xC, yC])
+                pub_A.publish(self._true_tmp[yA, xA])
+                pub_B.publish(self._true_tmp[yB, xB])
+                pub_C.publish(self._true_tmp[yC, xC])
             rate.sleep()
 
     def plot_static(self):
@@ -92,12 +90,13 @@ class MockTemperature(object):
         cb = plt.colorbar(p, cax=cax1)
         plt.show()
 
+
 if __name__ == "__main__":
     scale = 20
     dim = 2
-    print("Mocking temperature sensor")
+    print("Reading temperature sensor")
     if rospy.has_param("/scale"): scale = int(rospy.get_param("/scale"))
-    if rospy.has_param("/dim"): scale = int(rospy.get_param("/scale"))
+    if rospy.has_param("/dim"): dim = int(rospy.get_param("/dim"))
     profile = MockTemperature(scale, dim)
     profile.cast_temperature()
     # profile.plot_static()

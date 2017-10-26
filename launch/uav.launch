@@ -42,6 +42,8 @@
             <!--&lt;!&ndash;separate neighbour names by _ ; If A had B,C neighbour value="B_C"&ndash;&gt;-->
             <!--<param name="neighbors" value="$(arg Cs_neighbors)"/>-->
         <!--</node>-->
+        <node name="T" pkg="dummy_cloud_map" type="visualize_Temp.py" respawn="false" output="screen">
+        </node>
     </group>
 
     <group ns="PHI">
@@ -119,7 +121,7 @@
     </group>
 
     <group ns="Sensors">
-        <node name="A" pkg="cloud_map" type="mock_temperature_phenomenon.py" respawn="false" output="screen">
+        <node name="A" pkg="cloud_map" type="temperature_phenomenon.py" respawn="false" output="screen">
             <param name="name" value="A"/>
             <param name="port" value="14555"/>
         </node>

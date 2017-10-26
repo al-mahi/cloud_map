@@ -104,119 +104,192 @@ class dummy_uav(object):
         Algo 2 is taking sum instead of product.
         :param to_uav:
         """
-        # fix3d
-        # this can be any formula for building own belief from sensor data
+        #  intention weight is the pick of the intention in a scale 0~1
+        weight_high = {
+            "neighbors": 1.0,
+            "unexplored": 0.3,
+            "avoidcollision": 1.0,
+            "boundary": 1.0,
+            "tempchange": 0.6,
+            "humaninteresting": 0.5,
+            "humanannoying": 0.9,
+        }
+        weight_low = {
+            "neighbors": 0.5,
+            "unexplored": 0.1,
+            "avoidcollision": 0.0,
+            "boundary": 0.5,
+            "tempchange": 0.1,
+            "humaninteresting": 0.0,
+            "humanannoying":0.5,
+        }
+        def scale_dist(F, low=0., high=1., as_prob=False):
+            """
+            :type F: np.ndarray
+            :rtype: np.ndarray
+            """
+            if as_prob:
+                res = F - F.min()
+                res /= np.sum(res)
+            else:
+                cut = (F.min() - low)
+                res = F - cut
+                res /= res.max()
+                res *= high
+            return np.nan_to_num(res)
+
         neighbors_belief = np.zeros(shape=self._space)
         for v in self.neighbour_names:
             if not self._msg_received[v].data is None:
-                neighbors_belief += np.asanyarray(self._msg_received[v].data, dtype=np.float32).reshape(self._space)
+                nb = np.array(np.asanyarray(self._msg_received[v].data, dtype=np.float32).reshape(self._space))
+                if nb.max() > 0.:
+                    neighbors_belief += scale_dist(nb, low=weight_low["neighbors"], high=weight_high["neighbors"])
 
-        intention_weight = {
-            "unexplored": .2, "tempchange": .7, "avoidcollision": .8, "boundary": 1., "humaninteresting": .8, "humanannoying": 0.9
-        }
-
+        # build own belief
+        # start with boundary
         if self._dim == 2:
             boundary = np.zeros(shape=(self._scale, self._scale))
             X, Y = np.meshgrid(np.arange(0, self._scale, 1.), np.arange(0, self._scale, 1.))
             # boundary = (X-self._scale/2)**4 + (Y-self._scale/2)**4
             boundary[:, 0] = boundary[0, :] = boundary[:, self._scale-1] = boundary[self._scale-1, :] = 1.
-            boundary[0, 0] = boundary[0, self._scale - 1] = boundary[self._scale-1, 0] = boundary[self._scale-1, self._scale-1] = 2.
-            boundary /= np.sum(boundary)
+            boundary = scale_dist(boundary, low=weight_low["boundary"], high=weight_high["boundary"])
 
         if self._dim == 3:
-            # X, Y, Z = np.meshgrid(np.arange(0, self._scale, 1.), np.arange(0, self._scale, 1.), np.arange(0, self._scale, 1.))
-            # boundary = (X-self._scale/2)**2. + (Y-self._scale/2)**2. + (Z-self._scale/2)**2.
-            boundary = np.zeros(shape=self._space)
-            boundary[:, :, 0] = boundary[:, 0, :] = boundary[0, :, :] = boundary[:, :, self._scale-1] = boundary[:, self._scale-1, :] = boundary[self._scale-1, :, :] = 1.
-            boundary[0, 0, 0] = boundary[self._scale-1, self._scale-1, self._scale-1] = boundary[0, 0, self._scale-1] = 2.
-            boundary[0, self._scale-1, self._scale-1] = boundary[0, self._scale-1, 0] = boundary[self._scale-1, 0, 0] = 2.
-            boundary[self._scale-1, 0, self._scale-1] = boundary[self._scale-1, self._scale-1, 0] = 2.
-            boundary /= np.sum(boundary)
+            boundary = np.zeros(shape=(self._scale, self._scale, self._scale))
+            X, Y, Z = np.meshgrid(np.arange(0, self._scale, 1.), np.arange(0, self._scale, 1.), np.arange(0, self._scale, 1.))
+            boundary[0, :, :] = boundary[:, 0, :] = boundary[:, :, 0] = 1.
+            boundary[self._scale-1, :, :] = boundary[:, self._scale-1, :] = boundary[:, :, self._scale-1] = 1.
 
         self._phi["boundary"] = boundary
 
         own_belief = np.zeros(shape=self._space)
         for key in self.defined_intention_keys:
             if self._phi.has_key(key):
-                own_belief += (intention_weight[key] * self._phi[key])
+                own_belief += scale_dist(self._phi[key], low=weight_low[key], high=weight_high[key])
 
-        normalizer_k = np.sum(neighbors_belief)
-
-        normalizer_k1 = np.sum(own_belief)
-
-        own_belief -= (intention_weight["tempchange"] * self._phi["tempchange"])
-        own_belief -= (intention_weight["humanannoying"] * self._phi["humanannoying"])
-        own_belief -= (intention_weight["humaninteresting"] * self._phi["humaninteresting"])
+        for key in ["tempchange", "humanannoying", "humaninteresting", "boundary"]:
+            own_belief -= scale_dist(self._phi[key], low=weight_low[key], high=weight_high[key])
 
         for v in self.neighbour_names:
             if not self._msg_received[v].data is None:
-                belief_to_send = neighbors_belief - np.asanyarray(self._msg_received[v].data, dtype=np.float32).reshape(self._space) / normalizer_k
+                nb = np.array(np.asanyarray(self._msg_received[v].data, dtype=np.float32).reshape(self._space))
+                nb = scale_dist(nb, low=weight_low["neighbors"], high=weight_high["neighbors"])
+                other_neighbor = neighbors_belief - nb
+                tmp = other_neighbor + own_belief
+                self._msg_send[v] = scale_dist(tmp, as_prob=True)
 
-                tmp = belief_to_send + np.nan_to_num(own_belief / normalizer_k1)
-                if np.sum(tmp) > 0.0000001:
-                    self._msg_send[v] = tmp / np.sum(tmp)
-                else:
-                    self._msg_send[v] = tmp
+        for key in ["tempchange", "humanannoying", "humaninteresting", "boundary"]:
+            own_belief += scale_dist(self._phi[key], low=weight_low[key], high=weight_high[key])
 
-        own_belief += (intention_weight["tempchange"] * self._phi["tempchange"])
-        own_belief += (intention_weight["humanannoying"] * self._phi["humanannoying"])
-        own_belief += (intention_weight["humaninteresting"] * self._phi["humaninteresting"])
+        key = "avoidcollision"
+        own_belief -= scale_dist(self._phi[key], low=weight_low[key], high=weight_high[key])
 
-        own_belief -= (0.7 * intention_weight["avoidcollision"] * self._phi["avoidcollision"])
         new_intention = own_belief + neighbors_belief
-        res = new_intention / np.sum(new_intention)
-        self._intention_fusion = np.array(res.reshape(self._space), dtype=np.float32)
+        res = np.array(new_intention.reshape(self._space), dtype=np.float32)
+        self._intention_fusion = scale_dist(res, as_prob=True)
 
     def fly(self):
-        #  current position
         if self._dim == 2:
-            x, y = map(int, map(round, self.position[:]))
-        if self._dim == 3:
-            x, y, z = map(int, map(round, self.position[:]))
+            x, y = self.position[:]
+            dFdxy = np.array(np.gradient(self._intention_fusion), dtype=np.float)
+            xr, yr = map(int, map(round, [x, y]))
+            # approximate gradient at fractional point by linear interpolation
+            fraction = np.array([x, y]) - np.array([xr, yr])
+            fraction_norm = fraction / np.sum(np.abs(fraction))
+            # fraction_norm[np.abs(fraction_norm) < np.random.random()/self._dim] = 0
+            xn, yn = map(int, np.array([xr, yr]) + np.sign(fraction_norm))
+            if xr != xn:
+                rx = (x - xr) / (xn - xr)
+                dFdx = dFdxy[1, yr, xr] + rx * (dFdxy[1, yn, xn] - dFdxy[1, yr, xr])
+            else:
+                dFdx = dFdxy[1, yr, xr]
+            if yr != yn:
+                ry = (y - yr) / (yn - yr)
+                dFdy = dFdxy[0, yr, xr] + ry * (dFdxy[0, yn, xn] - dFdxy[0, yr, xr])
+            else:
+                dFdy = dFdxy[0, yr, xr]
+            grad = np.array([dFdx, dFdy])
+            k = np.sum(np.abs(grad))
 
-        if self._dim == 2:
-            gradient_at_cur_pos = np.array(np.gradient(1.-self._intention_fusion), dtype=np.float32)[:, x, y]
+            if np.isclose(k, 0., atol=1.e-6):
+                rospy.logdebug("[{}]{} at optimum!".format(dt.datetime.fromtimestamp(rospy.Time.now().to_time()).
+                                                           strftime("%M:%S.%f"), self.name))
+                grad = np.random.uniform(-1, 1, self._dim)
+                k = np.sum(np.abs(grad))
+            dx = (grad / k) #+ np.random.uniform(low=-1, high=1, size=dim)/100000.
+
         if self._dim == 3:
-            gradient_at_cur_pos = np.array(np.gradient(1.-self._intention_fusion), dtype=np.float32)[:, x, y, z]
+            x, y, z = self.position[:]
+            dFdxy = np.array(np.gradient(self._intention_fusion), dtype=np.float)
+            #  rounded coordinate for accessing the gradient
+            # approximate gradient at fractional point by linear interpolation
+            xr, yr, zr = map(int, map(round, [x, y, z]))
+            fraction = np.array([x, y, z]) - np.array([xr, yr, zr])
+            fraction_norm = fraction / np.sum(np.abs(fraction))
+            fraction_norm[np.abs(fraction_norm) < .1] = 0
+            xn, yn, zn = map(int, np.array([xr, yr, zr]) + np.sign(fraction_norm))
+            if xr != xn:
+                rx = (x - xr) / (xn - xr)
+                dFdx = dFdxy[1, yr, xr, zr] + rx * (dFdxy[1, yn, xn, zr] - dFdxy[1, yr, xr, zr])
+            else:
+                dFdx = dFdxy[1, yr, xr, zr]
+            if yr != yn:
+                ry = (y - yr) / (yn - yr)
+                dFdy = dFdxy[0, yr, xr, zr] + ry * (dFdxy[0, yn, xn, zn] - dFdxy[0, yr, xr, zr])
+            else:
+                dFdy = dFdxy[0, yr, xr, zr]
+            if zr != zn:
+                rz = (z - zr) / (zn - zr)
+                dFdz = dFdxy[2, yr, xr, zr] + rz * (dFdxy[2, yn, xn, zn] - dFdxy[2, yr, xr, zr])
+            else:
+                dFdz = dFdxy[2, yr, xr, zr]
+
+            np.set_printoptions(precision=3)
+
+
+            grad = np.array([dFdx, dFdy, dFdz])
+            k = np.sum(np.abs(grad))
+
+            if np.isclose(k, 0., atol=1.e-6):
+                print("optimum!!!")
+                grad = np.random.uniform(-1, 1, self._dim)
+                k = np.sum(np.abs(grad))
+            dx = (grad / k) #+ np.random.uniform(low=-1, high=1, size=dim)/100000.
 
         old_pos = self.position
-        p = np.random.rand() / self._dim
         goal = Pose()
-
-        for i in range(self._dim):
-            if np.isclose(gradient_at_cur_pos[i], 0., atol=1.e-6) or np.isnan(gradient_at_cur_pos[i]):
-                gradient_at_cur_pos[i] = 0.
-
-        k = np.sum(np.abs(gradient_at_cur_pos))
-        if not np.isclose(k, 0., atol=1.e-12):
-            grad_norm = gradient_at_cur_pos/k
-        else:
-            grad_norm = np.random.uniform(-1., 1., self._dim)
-            rospy.logdebug("[{}]{} at optimum!".format(dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%f"), self.name))
-
-        while True:
-            prob = np.abs(grad_norm)
-            dx = np.sign(grad_norm) * (prob > p)
-            new_pos = old_pos + dx
-            valid_move = True
-            for i in range(self._dim):
-                if round(new_pos[i]) < 0 or round(new_pos[i]) >= self._scale:
-                    valid_move = False
-                    rospy.logdebug("[{}]{} Pushing out! grad={}".format(dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%f"), self.name, gradient_at_cur_pos))
-                    if grad_norm[i] > 0.:
-                        grad_norm[i] = 0.
-                    if grad_norm[i] < 0.:
-                        grad_norm[i] = 0
-            if np.sum(np.abs(grad_norm)) > 1.e-8: grad_norm /= np.sum(np.abs(grad_norm))
-            if valid_move: break
-
+        dx[np.random.random(self._dim) < 0.1] = 0.
+        new_pos = old_pos - dx
+        for i in range(len(new_pos)):
+            if round(new_pos[i]) < 0 or round(new_pos[i]) >= self._scale:
+                rospy.logdebug("[{}]{} Pushing out! grad={}".format(dt.datetime.fromtimestamp(
+                    rospy.Time.now().to_time()).strftime("%M:%S.%f"), self.name, grad))
         self.pose.position.x = new_pos[0]
         self.pose.position.y = new_pos[1]
         if self._dim == 3:
             self.pose.position.z = new_pos[2]
-        np.set_printoptions(precision=4)
-        rospy.logdebug("[{}]{}:{}->{} grad={} grad_norm={} p={}".format(dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%f"), self.name, map(int, map(round, old_pos[:])), map(int, map(round, self.position[:])), gradient_at_cur_pos, grad_norm, p))
+        np.set_printoptions(precision=3)
+        if self._dim == 2:
+            rospy.logdebug(
+                "[{}]{}:{}->{} grad={} dx={}\ndfdxr[{},{}]={} dfdxn[{},{}]={} dfdx[{},{}]={}\ndfdyr[{},{}]={} "
+                "dfdyn[{},{}]={} dfdy[{},{}]={}".format(dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime(
+                    "%M:%S.%f")[:-4], self.name, old_pos[:], self.position[:], grad,dx,
+                            xr, yr, dFdxy[1, yr, xr], xn, yn,dFdxy[1, yn, xn], x, y, dFdx,
+                            xr, yr, dFdxy[0, yr, xr],xn, yn, dFdxy[0, yn, xn], x, y, dFdy)
+            )
+        if self._dim == 3:
+            rospy.logdebug("[{}]{}:{}->{} grad={} dx={}\ndfdxr[{},{},{}]={} dfdxn[{},{},{}]={} dfdx[{},{},{}]={}\n"
+                  "dfdyr[{},{},{}]={} dfdyn[{},{},{}]={} dfdy[{},{},{}]={}\n"
+                  "dfdzr[{},{},{}]={} dfdzn[{},{},{}]={} dfdz[{},{},{}]={}".format(
+                dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime(
+                "%M:%S.%f")[:-4], self.name, old_pos[:], self.position[:], grad,dx,
+                xr, yr, zr, dFdxy[1, yr, xr, zr], xn, yn, zn, dFdxy[1, yn, xn, zr], x, y, z, dFdx,
+                xr, yr, zr, dFdxy[0, yr, xr, zr], xn, yn, zn, dFdxy[0, yn, xn, zr], x, y, z, dFdy,
+                xr, yr, zr, dFdxy[2, yr, xr, zr], xn, yn, zn, dFdxy[2, yn, xn, zr], x, y, z, dFdz)
+            )
+
         self._pub_goal_euclid.publish(goal)
+
 
     def callback(self, pdf_intention):
         """

@@ -7,6 +7,7 @@ from tf.transformations import quaternion_from_euler
 from rospy.numpy_msg import numpy_msg
 from std_msgs.msg import String, Float32
 from cloud_map.msg import Belief
+from scipy.interpolate import griddata
 
 """
 This the module where we define different intention as probability distribution over the space.
@@ -23,30 +24,27 @@ class Unexplored(object):
         self._phi_unexplored = np.zeros(self._space)
         self._contour_scale = .8 # np.array([.5, .5, 1.])
         self._phi_unexplored_norm = np.zeros(self._space)
+        self._high = 1./self._scale
 
     def callback_pose(self, pose):
         """
-        :type pose: Pose 
+        :type pose: Pose
         :return: 
         """
-        # dist = multivariate_normal(mean=np.array(pose.position.__getstate__()[:self._dim], dtype='float'),
-        #                            cov=(self._scale * self._contour_scale) * np.identity(self._dim))
-        # indices = np.ndindex(self._space)
-        # last = np.array(map(lambda x: dist.pdf(np.array(x[:])), indices), dtype=np.float32).reshape(self._space)
-        # self._q_pose.append(last)
-        # self._q_pose = self._q_pose[-self._q_size:]
-        # self._phi_unexplored = np.zeros(self._space)
-        # decay = np.linspace(start=0.8, stop=1., num=len(self._q_pose))
-        # for i in range(len(self._q_pose)):
-        #     self._phi_unexplored += self._q_pose[i] * decay[i]
         x, y, z = map(int, map(round, pose.position.__getstate__()[:]))
-        if self._dim == 2: self._phi_unexplored[x, y] += 1.0
-        if self._dim == 3: self._phi_unexplored[x, y, z] += 1.0
+        if self._dim == 2:
+            val = self._phi_unexplored[y, x] + self._high/3.
+            # self._phi_unexplored[y, x] = min(val, self._high)
+            self._phi_unexplored[y, x] = val
+        if self._dim == 3:
+            val = self._phi_unexplored[y, x, z] + self._high/9.
+            # self._phi_unexplored[y, x, z] = min(val, self._high)
+            self._phi_unexplored[y, x, z] = val
         self._phi_unexplored_norm = self._phi_unexplored / np.sum(self._phi_unexplored)
 
     def start(self):
         rospy.init_node(self._name, log_level=rospy.DEBUG)
-        rate = rospy.Rate(4)
+        rate = rospy.Rate(2)
         rospy.Subscriber("/UAV/" + self._name + "/pose", Pose, callback=self.callback_pose)
         pub_unexplored = rospy.Publisher(self._name + '/unexplored', numpy_msg(Belief), queue_size=10.)
         while not rospy.is_shutdown():
@@ -62,7 +60,7 @@ def phi_unexplored_node(name):
     dim = int(rospy.get_param("/dim"))
     scale = int(rospy.get_param("/scale"))
     if rospy.has_param("/PHI/" + name + "/intent"):
-        intents = rospy.get_param("/PHI/" + name + "/intent") # type: str
+        intents = rospy.get_param("/PHI/" + name + "/intent")  # type: str
         if "unexplored" in intents.split('_'):
             phi_unexplored = Unexplored(name=name, dim=dim, scale=scale)
             phi_unexplored.start()
@@ -76,9 +74,11 @@ class TemperatureChange(object):
         self._space = tuple([scale for _ in range(dim)])
         self._dim = len(self._space)
         self._measured_temp = np.nan * np.ones(self._space)
+        self._inferred_temp = np.zeros(self._space)
         self._phi_temp_change = np.zeros(self._space)
         self._pose = Pose()
         self._tag = "[Temp {}]".format(self._name)
+        self._contour_scale = .3
 
         self._true_tmp = np.zeros(self._space)
         self.ground_tmp = 90.  # F
@@ -87,15 +87,15 @@ class TemperatureChange(object):
         if self._dim == 3:
             for i in range(int(scale)):
                 self._true_tmp[:, :, i] = self.ground_tmp - i * self.del_tmp
-            self._true_tmp[:, :, int((self._scale/2)-1):int((self._scale/2)+1)] -= 4.
-            self._true_tmp[:, :, int((self._scale/2))] -= 8.
+            self._true_tmp[:, :, int((self._scale-5)-1):int((self._scale-5)+2)] -= 4.
+            self._true_tmp[:, :, int((self._scale-5))] -= 8.
 
         if self._dim == 2:
             for i in range(int(scale)):
                 self._true_tmp[:, i] = self.ground_tmp - i * self.del_tmp
-            self._true_tmp[:, 10:14] -= 2.
-            self._true_tmp[:, 11:12] -= 4.
-        self._measured_temp = self._true_tmp
+            self._true_tmp[:, 10:14] -= 4.
+            self._true_tmp[:, 11:12] -= 8.
+        # self._measured_temp = self._true_tmp
 
     def callback_sensor_pose_euclid(self, pose):
         self._pose = pose
@@ -105,18 +105,31 @@ class TemperatureChange(object):
         :type temp: Float32
         :return:
         """
-        # temp = float(temp.data)
-        # x, y, z = map(int, np.array(self._pose.position.__getstate__())[:])
-        # if self._dim == 3:
-        #     self._measured_temp[x, y, z] = temp
-        # if self._dim == 2:
-        #     self._measured_temp[x, y] = temp
+        temp = float(temp.data)
+        x, y, z = map(int, np.array(self._pose.position.__getstate__())[:])
+        if self._dim == 3:
+            self._measured_temp[y, x, z] = temp
+        if self._dim == 2:
+            self._measured_temp[y, x] = temp
         # calc temp change
-        grad = np.gradient(self._measured_temp)
+        mask = ~np.isnan(self._measured_temp)
+        values = self._measured_temp[mask]
+        points = mask.nonzero()
+
+        if self._dim == 3:
+            xx, yy, zz = np.meshgrid(np.arange(self._scale), np.arange(self._scale), np.arange(self._scale))
+            self._inferred_temp = griddata(points, values, (xx, yy, zz), method='nearest')
+
+        if self._dim == 2:
+            xx, yy = np.meshgrid(np.arange(self._scale), np.arange(self._scale))
+            self._inferred_temp = griddata(points, values, (xx, yy), method='nearest')
+        grad = np.gradient(self._inferred_temp)
         if self._dim == 3: self._phi_temp_change = np.sqrt(grad[0]**2 + grad[1]**2 + grad[2]**2)
         if self._dim == 2: self._phi_temp_change = np.sqrt(grad[0]**2 + grad[1]**2)
         # self._phi_temp_change = np.nan_to_num(self._phi_temp_change)
         self._phi_temp_change /= np.sum(self._phi_temp_change)
+        # print("{}\nnan count ={}".format(self._name, np.count_nonzero(np.isnan(self._measured_temp))))
+        self._phi_temp_change = np.nan_to_num(self._phi_temp_change)
         self._phi_temp_change = 1. - self._phi_temp_change
 
     def start(self):
@@ -157,8 +170,11 @@ class AvoidCollision(object):
 
     def callback_sensor_pose_euclid(self, pose):
         self._pose = pose
-        dist = multivariate_normal(mean=np.array(pose.position.__getstate__()[:self._dim], dtype='float'),
-                                   cov= 0.2 * self._scale * np.identity(self._dim))
+        if self._dim == 2:
+            mean = np.array(pose.position.__getstate__()[:self._dim], dtype='float')[::-1]
+        if self._dim == 3:
+            mean = np.roll(np.array(pose.position.__getstate__()[:self._dim], dtype='float')[::-1], 2)
+        dist = multivariate_normal(mean=mean, cov= 0.2 * self._scale * np.identity(self._dim))
         indices = np.ndindex(self._space)
         self._phi_avoid_collision = np.array(map(lambda x: dist.pdf(np.array(x[:])), indices), dtype=np.float32).reshape(self._space)
 
@@ -206,8 +222,12 @@ class HumanIntention(object):
         tmp = np.zeros(self._space)
         for pose in self._list_interesting:
             indices = np.ndindex(self._space)
-            dist = multivariate_normal(mean=np.array(pose.position.__getstate__()[:self._dim], dtype='float'),
-                                       cov= 0.25 * self._scale * np.identity(self._dim))
+            if self._dim == 2:
+                mean = np.array(pose.position.__getstate__()[:self._dim], dtype='float')[::-1]
+            if self._dim == 3:
+                mean = np.roll(np.array(pose.position.__getstate__()[:self._dim], dtype='float')[::-1], 2)
+            if self._dim == 2:
+                dist = multivariate_normal(mean=mean, cov= 0.5 * self._scale * np.identity(self._dim))
             tmp += np.array(map(lambda x: dist.pdf(np.array(x[:])), indices), dtype=np.float32).reshape(self._space)
         if np.sum(tmp) > 0.:
             tmp /= np.sum(tmp)
@@ -224,8 +244,11 @@ class HumanIntention(object):
         tmp = np.zeros(self._space)
         for pose in self._list_annoying:
             indices = np.ndindex(self._space)
-            dist = multivariate_normal(mean=np.array(pose.position.__getstate__()[:self._dim], dtype='float'),
-                                       cov= 0.1 * self._scale * np.identity(self._dim))
+            if self._dim == 2:
+                mean = np.array(pose.position.__getstate__()[:self._dim], dtype='float')[::-1]
+            if self._dim == 3:
+                mean = np.roll(np.array(pose.position.__getstate__()[:self._dim], dtype='float')[::-1], 2)
+            dist = multivariate_normal(mean=mean, cov= 0.1 * self._scale * np.identity(self._dim))
             tmp += np.array(map(lambda x: dist.pdf(np.array(x[:])), indices), dtype=np.float32).reshape(self._space)
         if np.sum(tmp) > 0.:
             tmp /= np.sum(tmp)
