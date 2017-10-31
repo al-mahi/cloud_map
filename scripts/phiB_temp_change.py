@@ -1,3 +1,3 @@
 #!/usr/bin/python
 import phi
-phi.phi_mock_temperature_node("B")
+phi.phi_temperature_node("B")

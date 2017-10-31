@@ -222,8 +222,9 @@ class VisualizeTemperature(object):
         while not rospy.is_shutdown():
             rate.sleep()
 
+
 def visualize_temp(name="Temp"):
-    cmd = "rm /home/alien/catkin_ws/src/dummy_cloud_map/scripts/frames{}/*".format(name)
+    cmd = "rm /home/alien/catkin_ws/src/cloud_map/scripts/frames{}/*".format(name)
     os.system(cmd)
     dim = int(rospy.get_param("/dim"))
     if dim == 2:

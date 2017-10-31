@@ -135,7 +135,7 @@ class TemperatureChange(object):
     def start(self):
         rospy.init_node(self._name, log_level=rospy.DEBUG)
         rate = rospy.Rate(2)
-        rospy.Subscriber("/Sensors/" + self._name + "/mock_temperature", Float32, callback=self.callback_temp)
+        rospy.Subscriber("/Sensors/" + self._name + "/temperature", Float32, callback=self.callback_temp)
         rospy.Subscriber("/UAV/{}/pose".format(self._name), Pose, callback=self.callback_sensor_pose_euclid)
         pub_temp_change = rospy.Publisher("/PHI/{}/temp_change".format(self._name), numpy_msg(Belief), queue_size=10.)
 
@@ -148,7 +148,7 @@ class TemperatureChange(object):
             rate.sleep()
 
 
-def phi_mock_temperature_node(name):
+def phi_temperature_node(name):
     dim = int(rospy.get_param("/dim"))
     scale = int(rospy.get_param("/scale"))
     if rospy.has_param("/PHI/" + name + "/intent"):

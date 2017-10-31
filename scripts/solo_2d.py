@@ -7,14 +7,13 @@ from __future__ import print_function
 import numpy as np
 import dronekit
 import rospy
-import time
 from geometry_msgs.msg import Pose, Point, Quaternion, Twist, Vector3
 from tf.transformations import quaternion_from_euler
 from std_msgs.msg import String, Float32, Bool
-
+import time
 
 class solo_2d(object):
-    def __init__(self, name, port):
+    def __init__(self, name, port, scale, dim):
         """
         :param port: port number of solo controller to connect
         :param altitude: in meters
@@ -26,6 +25,7 @@ class solo_2d(object):
         self._goal_euclid = Pose(Point(0., 0., 0.), Quaternion(*quaternion_from_euler(0., 0., 0.)))
         self._dim = int(rospy.get_param("/dim"))
         self._scale = int(rospy.get_param("/scale"))
+        self._space = tuple([scale for _ in range(dim)])
         # cowboy cricket ground bowling end 36.133642, -97.076528
         self._origin_lat = 36.133450
         self._origin_lon = -97.076666
@@ -33,10 +33,10 @@ class solo_2d(object):
         self._log_file = open("log_poses_{}_{}.txt".format(self._tag, time.time()), mode='a+')
         self._origin_alt = 10.  # meter
         if name == 'A':
-            self._origin_alt = 12.  # meter
+            self._origin_alt = 10.5  # meter
         self._goal_alt = 20
-        self._meters_per_alt = 1.
-        self._meters_per_disposition = 4.
+        self._meters_per_alt = 5.
+        self._meters_per_disposition = 5.
         self._meters_per_lat = 110961.03  # meters per degree of latitude for use near Stillwater
         self._meters_per_lon = 90037.25  # meters per degree of longitude
 
@@ -46,14 +46,6 @@ class solo_2d(object):
         max_lat = self._origin_lat + (self._meters_per_disposition * self._scale) / self._meters_per_lat
         max_alt = self._origin_alt + (self._meters_per_disposition * self._scale) / self._meters_per_alt
 
-        lon_x = np.linspace(self._origin_lon, max_lon, self._scale)
-        lat_y = np.linspace(self._origin_lat, max_lat, self._scale)
-        alt_z = np.linspace(self._origin_alt, max_alt, self._scale)
-
-        for x in range(self._scale):
-            for y in range(self._scale):
-                for z in range(self._scale):
-                    self.gps_grid[x, y, z] = np.array([lon_x[x], lat_y[y], alt_z[z]])
         try:
             self._vehicle = dronekit.connect("udpin:0.0.0.0:{}".format(port))
         except Exception as e:
@@ -68,11 +60,15 @@ class solo_2d(object):
         Init ROS node.
         Arms vehicle and fly to aTargetAltitude (in meters).
         """
+        rospy.init_node(self._name, log_level=rospy.DEBUG)
+        rospy.logdebug("{} init node".format(self._tag))
+        rate = rospy.Rate(1)
+
         print("{}Basic pre-arm checks".format(self._tag))
         # Don't try to arm until autopilot is ready
         while not self._vehicle.is_armable:
             print("{}Waiting for vehicle to initialise...".format(self._tag))
-            time.sleep(1)
+            rate.sleep(1)
 
         rospy.logdebug("{}Arming motors".format(self._tag))
         # Copter should arm in GUIDED mode
@@ -82,30 +78,25 @@ class solo_2d(object):
         # Confirm vehicle armed before attempting to take off
         while not self._vehicle.armed:
             print("{}Waiting for arming...".format(self._tag))
-            time.sleep(1)
+            rate.sleep(1)
 
         print("{}Taking off to {}m".format(self._tag, self._origin_alt))
         self._vehicle.simple_takeoff(self._origin_alt)
 
         # give solo time to take off
-        time.sleep(10)
-        self._goal_euclid = Pose(Point(start_at_euclid[0], start_at_euclid[1], self._origin_alt + self._meters_per_alt * start_at_euclid[2]), Quaternion(*quaternion_from_euler(0., 0., 0.)))
-        lat, lon = self.euclid_to_geo(NS=self._goal_euclid.position.y, EW=self._goal_euclid.position.x)
+        rate.sleep(10)
+        self._goal_euclid = Pose(Point(start_at_euclid[0], start_at_euclid[1], start_at_euclid[2]), Quaternion(
+            *quaternion_from_euler(0., 0., 0.)))
+        self._goal_gps = self.euclid_to_geo(NS=self._goal_euclid.position.y, EW=self._goal_euclid.position.x,
+                                            UD=self._goal_euclid.position.z)
         # longitude EW = x axis and latitude NS = y axis
-        self._goal_gps.position.x = lon
-        self._goal_gps.position.y = lat
-        self._goal_gps.position.z = self._origin_alt + self._meters_per_alt * self._goal_euclid.position.z
         # send solo to initial location
-        self._vehicle.simple_goto(dronekit.LocationGlobalRelative(lat=self._goal_gps.position.y, lon=self._goal_gps.position.x,
-                                                                  alt=self._goal_gps.position.z))
-        print("{}Sending to initial goal (x,y,z)=({}) (lon, lat, alt)=({},{},{})".
-              format(self._tag, start_at_euclid, lon, lat, self._origin_alt + self._meters_per_alt * start_at_euclid[2]))
-
-        time.sleep(5)
-
-        rospy.init_node(self._name, log_level=rospy.DEBUG)
-        rospy.logdebug("{} init node".format(self._tag))
-        rate = rospy.Rate(1)
+        self._vehicle.simple_goto(dronekit.LocationGlobalRelative(
+            lat=self._goal_gps.position.y, lon=self._goal_gps.position.x, alt=self._goal_gps.position.z))
+        print("{}Sending to initial goal (x,y,z)=({}) (lon, lat, alt)=({},{},{})".format(
+            self._tag, start_at_euclid, self._goal_gps.position.y, self._goal_gps.position.x, self._goal_gps.position.z)
+        )
+        rate.sleep(3)
 
         rospy.Subscriber("/UAV/{}/next_way_point_euclid".format(self._name), data_class=Pose,
                          callback=self.callback_go_to_next_euclidean_way_point)
@@ -124,17 +115,23 @@ class solo_2d(object):
             self._pub_distance_to_goal.publish(self.get_distance_to_goal())
             rate.sleep()
 
-    def euclid_to_geo(self, NS, EW):
+    def euclid_to_geo(self, NS, EW, UD):
         """
         Converts euclid NED coordinate and converts it to gps latitude and longitude.
         displacement in meters (N and E are positive, S and W are negative), and outputs the new lat/long
         CAUTION: the numbers below are set for use near Stillwater will change at other lattitudes
         :param NS: set as y axis of euclidean coordinate
         :param EW: set as x axis of euclidean coordinate
-        :return:
+        :rtype: Pose
         """
-        return self._origin_lat + self._meters_per_disposition * NS / self._meters_per_lat,\
-               self._origin_lon + self._meters_per_disposition * EW / self._meters_per_lon
+        pose = Pose()
+        lon = self._origin_lat + self._meters_per_disposition * NS / self._meters_per_lat
+        lat = self._origin_lon + self._meters_per_disposition * EW / self._meters_per_lon
+        alt = self._origin_alt + self._meters_per_alt * UD
+        pose.position.x = lon
+        pose.position.y = lat
+        pose.position.z = alt
+        return pose
 
     def pose_in_euclid(self):
         """
@@ -155,9 +152,9 @@ class solo_2d(object):
                        self._vehicle.location.global_relative_frame.lon,
                        self._vehicle.location.global_relative_frame.lat,
                        self._vehicle.location.global_relative_frame.alt))
-        self._log_file.write("{}_{}_ {},{},{} {},{},{}\n".format(self._tag, rospy.Time.now(), self._vehicle.location.global_relative_frame.lon,
-                                                      self._vehicle.location.global_relative_frame.lat,
-                                                      self._vehicle.location.global_relative_frame.alt, pose.position.x, pose.position.y, pose.position.z))
+        # self._log_file.write("{}_{}_ {},{},{} {},{},{}\n".format(self._tag, rospy.Time.now(), self._vehicle.location.global_relative_frame.lon,
+        #                                               self._vehicle.location.global_relative_frame.lat,
+        #                                               self._vehicle.location.global_relative_frame.alt, pose.position.x, pose.position.y, pose.position.z))
 
         if pose.position.x < -1. or pose.position.y < -1. or pose.position.x >= self._scale or pose.position.y >= self._scale:
             rospy.logdebug("{} landing because went out of boundary!!! ".format(self._tag))
@@ -175,13 +172,13 @@ class solo_2d(object):
             return
 
         self._goal_euclid = goal_euclid
-        lat, lon = self.euclid_to_geo(NS=goal_euclid.position.y, EW=goal_euclid.position.x)
         # longitude EW = x axis and latitude NS = y axis, E is +x, N is +y
-        self._goal_gps.position.x = lon
-        self._goal_gps.position.y = lat
-        self._goal_gps.position.z = self._origin_alt + self._meters_per_alt * goal_euclid.position.z
-        rospy.logdebug("{}Going to waypoint (x,y,z)=({},{},{}) lat={} long={} alt={}".
-                       format(self._tag,goal_euclid.position.x, goal_euclid.position.y, goal_euclid.position.z, lat, lon, self._goal_gps.position.z))
+        self._goal_gps = self.euclid_to_geo(NS=goal_euclid.position.y, EW=goal_euclid.position.x, UD=goal_euclid.position.z)
+
+        rospy.logdebug("{}Going to waypoint (x,y,z)=({},{},{}) (lat,long,alt)=({},{},{})".format(
+            self._tag, goal_euclid.position.x, goal_euclid.position.y, goal_euclid.position.z,
+            self._goal_gps.position.y, self._goal_gps.position.x, self._goal_gps.position.z))
+
         self._vehicle.simple_goto(dronekit.LocationGlobalRelative(self._goal_gps.position.y, self._goal_gps.position.x,
                                                                   self._goal_gps.position.z))
 

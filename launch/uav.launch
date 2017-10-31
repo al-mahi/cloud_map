@@ -1,6 +1,6 @@
 <launch>
     <!--dimension of the space 2 or 3-->
-    <arg name="dim" value="2"/>
+    <arg name="dim" value="3"/>
     <!--scale of the space-->
     <arg name="scale" value="16"/>
     <arg name="As_neighbors" value="B"/>
