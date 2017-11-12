@@ -16,7 +16,7 @@ from std_msgs.msg import String, Float32
 from scipy.interpolate import griddata
 
 
-class VisualizeTemperature(object):
+class VisualizeHumidity(object):
     def __init__(self, name, dim, scale, q_size=60):
         self._name = name
         self._dim = dim
@@ -24,14 +24,14 @@ class VisualizeTemperature(object):
         self._space = tuple([scale for _ in range(dim)])
         self._dim = len(self._space)
         self._cutoff_percentile = 90
-        self._measured_temp = np.nan * np.ones(self._space)
-        self._inferred_temp = np.zeros(self._space)
-        self._phi_temp_change = np.zeros(self._space)
+        self._measured_humidity = np.nan * np.ones(self._space)
+        self._inferred_humidity = np.zeros(self._space)
+        self._phi_humidity_change = np.zeros(self._space)
         self._pose = Pose()
-
 
     def callback_sensor_pose_euclid(self, pose):
         self._pose = pose
+
     def update_measured_viz(self, num, unused_iterable, ax, cax):
         """
         :type num: int
@@ -42,19 +42,19 @@ class VisualizeTemperature(object):
         plt.savefig("{}/frames{}/{}_{:04d}_joint.png".format(os.path.dirname(__file__), self._name, self._name, num))
         ax.clear()
         # Setting the axes properties
+
         try:
             ax.set_xlim3d([0.0, float(self._scale)])
             ax.set_ylim3d([0.0, float(self._scale)])
             ax.set_zlim3d([0.0, float(self._scale)])
         except ValueError:
             pass
-
         ax.set_xlabel('Y')
         ax.set_ylabel('X')
         ax.set_zlabel('Z')
         ax.set_xticks([])
         ax.set_yticks([])
-        F = self._measured_temp
+        F = self._measured_humidity
         ax.set_title("{}_Measured#{}".format(self._name, num))
         t = np.nan_to_num(F)
         ind = np.where(t > 0)
@@ -65,40 +65,39 @@ class VisualizeTemperature(object):
         cb.set_label("{} in F".format(self._name))
         return p
 
-    def callback_temp(self, temp):
+    def callback_humidity(self, hum):
         """
-        :type temp: Float32
+        :type hum: Float32
         :return:
         """
-        temp = float(temp.data)
+        val = float(hum.data)
         x, y, z = map(int, map(round, np.array(self._pose.position.__getstate__())[:]))
         if self._dim == 3:
-            self._measured_temp[y, x, z] = temp
+            self._measured_humidity[y, x, z] = val
         if self._dim == 2:
-            self._measured_temp[y, x] = temp
-        # calc temp change
-        mask = ~np.isnan(self._measured_temp)
-        values = self._measured_temp[mask]
+            self._measured_humidity[y, x] = val
+        # calc humidity change
+        mask = ~np.isnan(self._measured_humidity)
+        values = self._measured_humidity[mask]
         points = mask.nonzero()
 
         method = 'nearest'
 
         if self._dim == 3:
             xx, yy, zz = np.meshgrid(np.arange(self._scale), np.arange(self._scale), np.arange(self._scale))
-            self._inferred_temp = griddata(points, values, (xx, yy, zz), method=method)
+            self._inferred_humidity = griddata(points, values, (xx, yy, zz), method=method)
 
         if self._dim == 2:
             xx, yy = np.meshgrid(np.arange(self._scale), np.arange(self._scale))
-            self._inferred_temp = griddata(points, values, (xx, yy), method=method)
-        grad = np.gradient(self._inferred_temp)
-        if self._dim == 3: self._phi_temp_change = np.sqrt(grad[0]**2 + grad[1]**2 + grad[2]**2)
-        if self._dim == 2: self._phi_temp_change = np.sqrt(grad[0]**2 + grad[1]**2)
-        # self._phi_temp_change = np.nan_to_num(self._phi_temp_change)
-        self._phi_temp_change /= np.sum(self._phi_temp_change)
-        # print("{}\nnan count ={}".format(self._name, np.count_nonzero(np.isnan(self._measured_temp))))
-        self._phi_temp_change = np.nan_to_num(self._phi_temp_change)
-        self._phi_temp_change = 1. - self._phi_temp_change
-
+            self._inferred_humidity = griddata(points, values, (xx, yy), method=method)
+        grad = np.gradient(self._inferred_humidity)
+        if self._dim == 3: self._phi_humidity_change = np.sqrt(grad[0]**2 + grad[1]**2 + grad[2]**2)
+        if self._dim == 2: self._phi_humidity_change = np.sqrt(grad[0]**2 + grad[1]**2)
+        # self._phi_humidity_change = np.nan_to_num(self._phi_humidity_change)
+        self._phi_humidity_change /= np.sum(self._phi_humidity_change)
+        # print("{}\nnan count ={}".format(self._name, np.count_nonzero(np.isnan(self._measured_humidity))))
+        self._phi_humidity_change = np.nan_to_num(self._phi_humidity_change)
+        self._phi_humidity_change = 1. - self._phi_humidity_change
 
     def update_gradient_viz(self, num, unused_iterable, ax):
         """
@@ -116,12 +115,14 @@ class VisualizeTemperature(object):
             ax.set_zlim3d([0.0, float(self._scale)])
         except ValueError:
             pass
+
         ax.set_xlabel('Y')
         ax.set_ylabel('X')
         ax.set_zlabel('Z')
+
         ax.set_xticks([])
         ax.set_yticks([])
-        F = self._phi_temp_change
+        F = self._phi_humidity_change
         ax.set_title("{} gradient#{}".format(self._name, num))
         t = np.nan_to_num(F)
         ind = np.where((t > np.percentile(t, self._cutoff_percentile))
@@ -149,13 +150,13 @@ class VisualizeTemperature(object):
             ax.set_zlim3d([0.0, float(self._scale)])
         except ValueError:
             pass
-
         ax.set_xlabel('Y')
         ax.set_ylabel('X')
         ax.set_zlabel('Z')
+
         ax.set_xticks([])
         ax.set_yticks([])
-        F = self._inferred_temp
+        F = self._inferred_humidity
 
         npts = 60
         x = np.arange(0, self._scale)
@@ -180,7 +181,7 @@ class VisualizeTemperature(object):
         plt.savefig("{}/frames{}/{}_{:04d}_joint.png".format(os.path.dirname(__file__), self._name, self._name, num))
         ax.clear()
 
-        F = np.sum(self._inferred_temp, axis=(0,1)) / self._scale**2
+        F = np.sum(self._inferred_humidity, axis=(0,1)) / self._scale**2
         ax.set_title("{} vertical profiel#{}".format(self._name, num))
         ax.yaxis.tick_right()
         ax.set_xlabel("{}".format(self._name))
@@ -192,8 +193,8 @@ class VisualizeTemperature(object):
     def start(self):
         rospy.init_node(self._name, log_level=rospy.DEBUG)
         rate = rospy.Rate(2)
-        rospy.Subscriber("/Sensors/A/temperature", Float32, callback=self.callback_temp)
-        rospy.Subscriber("/UAV/A/pose", Pose, callback=self.callback_sensor_pose_euclid)
+        rospy.Subscriber("/Sensors/B/humidity", Float32, callback=self.callback_humidity)
+        rospy.Subscriber("/UAV/B/pose", Pose, callback=self.callback_sensor_pose_euclid)
 
 
         fig = plt.figure(2)
@@ -206,7 +207,6 @@ class VisualizeTemperature(object):
         x, y, z = np.meshgrid(np.arange(0, self._scale, dtype='int'), np.arange(0, self._scale, dtype='int'), np.arange(0, self._scale, dtype='int'))
 
         unused = [ax1measured.scatter(x, y, z)]  # dummy iterable required for animation
-
 
         cax1 = fig.add_axes([.01, .65, .01, .25])
         cax2 = fig.add_axes([.01, .15, .01, .25])
@@ -224,18 +224,18 @@ class VisualizeTemperature(object):
             rate.sleep()
 
 
-def visualize_temp(name="Temp"):
+def visualize_humidity(name="Humidity"):
     cmd = "rm /home/alien/catkin_ws/src/cloud_map/scripts/frames{}/*".format(name)
     os.system(cmd)
     dim = int(rospy.get_param("/dim"))
     if dim == 2:
-        rospy.logdebug("Temp visulaization is nly available on 3D!")
+        rospy.logdebug("humidity visulaization is only available on 3D!")
         exit()
     scale = int(rospy.get_param("/scale"))
-    temp_viz = VisualizeTemperature(name=name, dim=dim, scale=scale)
-    temp_viz.start()
+    humidity_viz = VisualizeHumidity(name=name, dim=dim, scale=scale)
+    humidity_viz.start()
 
 
 if __name__ == '__main__':
-    print("visual TEMP!!!!!")
-    visualize_temp()
+    print("visual humidity!!!!!")
+    visualize_humidity()

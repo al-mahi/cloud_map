@@ -8,10 +8,13 @@ from rospy.numpy_msg import numpy_msg
 from std_msgs.msg import String, Float32
 from cloud_map.msg import Belief
 from scipy.interpolate import griddata
+import datetime as dt
 
 """
 This the module where we define different intention as probability distribution over the space.
 """
+
+
 class Unexplored(object):
     def __init__(self, name, dim, scale, q_size=1500):
         self._name = name
@@ -31,16 +34,20 @@ class Unexplored(object):
         :type pose: Pose
         :return: 
         """
-        x, y, z = map(int, map(round, pose.position.__getstate__()[:]))
-        if self._dim == 2:
-            val = self._phi_unexplored[y, x] + self._high/3.
-            # self._phi_unexplored[y, x] = min(val, self._high)
-            self._phi_unexplored[y, x] = val
-        if self._dim == 3:
-            val = self._phi_unexplored[y, x, z] + self._high/9.
-            # self._phi_unexplored[y, x, z] = min(val, self._high)
-            self._phi_unexplored[y, x, z] = val
-        self._phi_unexplored_norm = self._phi_unexplored / np.sum(self._phi_unexplored)
+        try:
+            x, y, z = map(int, map(round, pose.position.__getstate__()[:]))
+            if self._dim == 2:
+                val = self._phi_unexplored[y, x] + self._high/3.
+                # self._phi_unexplored[y, x] = min(val, self._high)
+                self._phi_unexplored[y, x] = val
+            if self._dim == 3:
+                val = self._phi_unexplored[y, x, z] + self._high/9.
+                # self._phi_unexplored[y, x, z] = min(val, self._high)
+                self._phi_unexplored[y, x, z] = val
+            self._phi_unexplored_norm = self._phi_unexplored / np.sum(self._phi_unexplored)
+        except IndexError as ex:
+            rospy.logerr("{}[{}] Index error {}".format(self._name, self._tag, dt.datetime.fromtimestamp(
+                rospy.Time.now().to_time()).strftime("%H:%M:%S")), ex.message)
 
     def start(self):
         rospy.init_node(self._name, log_level=rospy.DEBUG)
@@ -64,6 +71,79 @@ def phi_unexplored_node(name):
         if "unexplored" in intents.split('_'):
             phi_unexplored = Unexplored(name=name, dim=dim, scale=scale)
             phi_unexplored.start()
+
+
+class HumidityChange(object):
+    def __init__(self, name, dim, scale, q_size=60):
+        self._name = name
+        self._dim = dim
+        self._scale = scale
+        self._space = tuple([scale for _ in range(dim)])
+        self._dim = len(self._space)
+        self._measured_hum = np.nan * np.ones(self._space)
+        self._inferred_hum = np.zeros(self._space)
+        self._phi_hum_change = np.zeros(self._space)
+        self._pose = Pose()
+        self._tag = "[Hum {}]".format(self._name)
+        self._contour_scale = .3
+
+    def callback_sensor_pose_euclid(self, pose):
+        self._pose = pose
+
+    def callback_hum(self, hum):
+        """
+        :type hum: Float32
+        :return:
+        """
+        val = float(hum.data)
+        x, y, z = map(int, np.array(self._pose.position.__getstate__())[:])
+        if self._dim == 3:
+            self._measured_hum[y, x, z] = val
+        if self._dim == 2:
+            self._measured_hum[y, x] = val
+        # calc hum change
+        mask = ~np.isnan(self._measured_hum)
+        values = self._measured_hum[mask]
+        points = mask.nonzero()
+
+        if self._dim == 3:
+            xx, yy, zz = np.meshgrid(np.arange(self._scale), np.arange(self._scale), np.arange(self._scale))
+            self._inferred_hum = griddata(points, values, (xx, yy, zz), method='nearest')
+
+        if self._dim == 2:
+            xx, yy = np.meshgrid(np.arange(self._scale), np.arange(self._scale))
+            self._inferred_hum = griddata(points, values, (xx, yy), method='nearest')
+        grad = np.gradient(self._inferred_hum)
+        if self._dim == 3: self._phi_hum_change = np.sqrt(grad[0]**2 + grad[1]**2 + grad[2]**2)
+        if self._dim == 2: self._phi_hum_change = np.sqrt(grad[0]**2 + grad[1]**2)
+        self._phi_hum_change /= np.sum(self._phi_hum_change)
+        self._phi_hum_change = np.nan_to_num(self._phi_hum_change)
+        self._phi_hum_change = 1. - self._phi_hum_change
+
+    def start(self):
+        rospy.init_node(self._name, log_level=rospy.DEBUG)
+        rate = rospy.Rate(2)
+        rospy.Subscriber("/Sensors/" + self._name + "/humidity", Float32, callback=self.callback_hum)
+        rospy.Subscriber("/UAV/{}/pose".format(self._name), Pose, callback=self.callback_sensor_pose_euclid)
+        pub_hum_change = rospy.Publisher("/PHI/{}/humidity_change".format(self._name), numpy_msg(Belief), queue_size=10.)
+
+        while not rospy.is_shutdown():
+            msg = Belief()
+            msg.header.frame_id = self._name
+            msg.header.stamp = rospy.Time.now()
+            msg.data = self._phi_hum_change.ravel()
+            pub_hum_change.publish(msg)
+            rate.sleep()
+
+
+def phi_humidity_node(name):
+    dim = int(rospy.get_param("/dim"))
+    scale = int(rospy.get_param("/scale"))
+    if rospy.has_param("/PHI/" + name + "/intent"):
+        intents = rospy.get_param("/PHI/" + name + "/intent") # type: str
+        if "humiditychange" in intents.split('_'):
+            phi_hum = HumidityChange(name=name, dim=dim, scale=scale)
+            phi_hum.start()
 
 
 class TemperatureChange(object):
@@ -105,12 +185,12 @@ class TemperatureChange(object):
         :type temp: Float32
         :return:
         """
-        temp = float(temp.data)
+        val = float(temp.data)
         x, y, z = map(int, np.array(self._pose.position.__getstate__())[:])
         if self._dim == 3:
-            self._measured_temp[y, x, z] = temp
+            self._measured_temp[y, x, z] = val
         if self._dim == 2:
-            self._measured_temp[y, x] = temp
+            self._measured_temp[y, x] = val
         # calc temp change
         mask = ~np.isnan(self._measured_temp)
         values = self._measured_temp[mask]
@@ -156,6 +236,7 @@ def phi_temperature_node(name):
         if "tempchange" in intents.split('_'):
             phi_temp = TemperatureChange(name=name, dim=dim, scale=scale)
             phi_temp.start()
+
 
 class AvoidCollision(object):
     def __init__(self, name, dim, scale, q_size=60):
@@ -254,8 +335,6 @@ class HumanIntention(object):
             tmp /= np.sum(tmp)
             self.phi_human_annoying = tmp
 
-
-
     def callback_sensor_pose_euclid(self, pose):
         self._pose = pose
         for pose_interesting in self._list_interesting:
@@ -280,7 +359,6 @@ class HumanIntention(object):
 
         pub_human_annoying = rospy.Publisher("/PHI/{}/human_annoying".format(self._name), numpy_msg(Belief), queue_size=10.)
         pub_human_interesting = rospy.Publisher("/PHI/{}/human_interesting".format(self._name), numpy_msg(Belief), queue_size=10.)
-
 
         while not rospy.is_shutdown():
             msg1 = Belief()

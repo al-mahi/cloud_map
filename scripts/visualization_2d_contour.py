@@ -15,12 +15,12 @@ from matplotlib import cm
 import os
 import rospy
 from geometry_msgs.msg import Pose, Point, Quaternion, Twist, Vector3
-from dummy_cloud_map.msg import Belief
+from cloud_map.msg import Belief
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from subprocess import call
 import datetime as dt
 # plt.rcParams['animation.ffmpeg_path'] = '/usr/bin/ffmpeg'
-from dummy_cloud_map.msg import Belief
+from cloud_map.msg import Belief
 import time
 
 
@@ -195,7 +195,7 @@ class Visualization(object):
             cb = plt.colorbar(p, cax=cax)
             return p
         else:
-            print("No update sent to {}".format(to_uav))
+            # print("No update sent to {}".format(to_uav))
             return unused_iterable[-1]
 
     def update_received_viz(self, num, unused_iterable, ax, from_uav, cax):

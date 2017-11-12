@@ -118,18 +118,20 @@ class Visualization(object):
         :type ax: Axes3D
         :return:
         """
-        if num < 1000:
-            plt.savefig("{}/frames{}/{}_{:04d}_joint.png".format(os.path.dirname(__file__), self.name, self.name, num))
+        plt.savefig("{}/frames{}/{}_{:04d}_joint.png".format(os.path.dirname(__file__), self.name, self.name, num))
         ax.clear()
         # Setting the axes properties
-        ax.set_xlim3d([0.0, float(self.d)])
+        try:
+            ax.set_xlim3d([0.0, float(self.d)])
+            ax.set_ylim3d([0.0, float(self.d)])
+            ax.set_zlim3d([0.0, float(self.d)])
+        except ValueError:
+            pass
+
         ax.set_xlabel('X')
-
-        ax.set_ylim3d([0.0, float(self.d)])
         ax.set_ylabel('Y')
-
-        ax.set_zlim3d([0.0, float(self.d)])
         ax.set_zlabel('Z')
+
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_zticks([])
@@ -163,13 +165,16 @@ class Visualization(object):
         #     plt.savefig("{}/frames{}/{}_to_{}_{:04d}.png".format(os.path.dirname(__file__), self.name, self.name, to_uav, num))
         ax.clear()
         # Setting the axes properties
-        ax.set_xlim3d([0.0, float(self.d)])
+
+        try:
+            ax.set_xlim3d([0.0, float(self.d)])
+            ax.set_ylim3d([0.0, float(self.d)])
+            ax.set_zlim3d([0.0, float(self.d)])
+        except ValueError:
+            pass
+
         ax.set_xlabel('X')
-
-        ax.set_ylim3d([0.0, float(self.d)])
         ax.set_ylabel('Y')
-
-        ax.set_zlim3d([0.0, float(self.d)])
         ax.set_zlabel('Z')
 
         ax.set_xticks([])
@@ -191,10 +196,13 @@ class Visualization(object):
             # uncomment when save in fig
             cb = plt.colorbar(p, cax=cax)
             cb.set_label("{}-->{}".format(self.name, to_uav, num))
-            cb.ax.set_xticklabels([np.min(t[ind]), np.max(t[ind])])
+            try:
+                cb.ax.set_xticklabels([np.min(t[ind]), np.max(t[ind])])
+            except ValueError as ex:
+                rospy.logdebug("{} Exception {}".format(self.name, ex.message))
             return p
         else:
-            print("No update sent to {}".format(to_uav))
+            # print("No update sent to {}".format(to_uav))
             return unused_iterable[-1]
 
     def update_received_viz(self, num, unused_iterable, ax, from_uav, cax):
@@ -208,13 +216,14 @@ class Visualization(object):
         #     plt.savefig("{}/frames{}/{}_from_{}_{:04d}.png.png".format(os.path.dirname(__file__), self.name, self.name, from_uav, num))
         ax.clear()
         # Setting the axes properties
-        ax.set_xlim3d([0.0, float(self.d)])
+        try:
+            ax.set_xlim3d([0.0, float(self.d)])
+            ax.set_ylim3d([0.0, float(self.d)])
+            ax.set_zlim3d([0.0, float(self.d)])
+        except ValueError:
+            pass
         ax.set_xlabel('X')
-
-        ax.set_ylim3d([0.0, float(self.d)])
         ax.set_ylabel('Y')
-
-        ax.set_zlim3d([0.0, float(self.d)])
         ax.set_zlabel('Z')
 
         ax.set_xticks([])
@@ -238,10 +247,14 @@ class Visualization(object):
             # uncomment when save in fig
             cb = plt.colorbar(p, cax=cax)
             cb.set_label("{}<--{}".format(self.name, from_uav, num))
-            cb.ax.set_xticklabels([np.min(t[ind]), np.max(t[ind])])
+            try:
+                cb.ax.set_xticklabels([np.min(t[ind]), np.max(t[ind])])
+            except ValueError as ex:
+                rospy.logdebug("{} Exception {}".format(self.name, ex.message))
+            return p
             return p
         else:
-            print("no update received from {}!".format(from_uav))
+            # print("no update received from {}!".format(from_uav))
             return unused_iterable[-1]
 
     def callback_pose(self, pose, from_uav):
@@ -285,7 +298,6 @@ class Visualization(object):
         tmp[0, :, :] = tmp[:, 0, :] = tmp[:, :, 0] = 0.
         tmp[self.d-1, :, :] = tmp[:, self.d-1, :] = tmp[:, :, self.d-1] = 0.
         self._intention_self = tmp
-
 
 def visualizer(name):
     # delete previous output plots

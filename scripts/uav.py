@@ -5,7 +5,7 @@ import rospy
 from geometry_msgs.msg import Pose, Point, Quaternion, Twist, Vector3
 from tf.transformations import quaternion_from_euler
 from rospy.numpy_msg import numpy_msg
-from std_msgs.msg import String, Float32
+from std_msgs.msg import String, Float32, Bool
 from cloud_map.msg import Belief
 import datetime as dt
 import time
@@ -23,7 +23,7 @@ class dummy_uav(object):
         self._pose = Pose(Point(0., 0., 0.), Quaternion(*quaternion_from_euler(0., 0., 0.)))
         self._vel = Twist(Vector3(1., 0., 0.), Vector3(0., 0., 0.))
         self._stall_vel = 1.0
-        self._defined_intention_keys = ["boundary", "unexplored", "tempchange", "avoidcollision", "humaninteresting", "humanannoying"]
+        self._defined_intention_keys = ["boundary", "unexplored", "tempchange", "avoidcollision", "humaninteresting", "humanannoying", "humiditychange"]
         # self._neighbors_intention_keys = ["boundary", "unexplored", "tempchange"]
         self._decay_explored = .3
         self._decay_belief = .3
@@ -38,27 +38,19 @@ class dummy_uav(object):
             self._phi[key] = np.zeros(self._space)
         self._pub_goal_euclid = rospy.Publisher("/UAV/{}/next_way_point_euclid".format(self._name), data_class=Pose, queue_size=10)
 
+        self._solo_is_ready = False
+        self._solo_wants_to_fly = False
+
     @property
     def name(self):
         return self._name
-
-    @property
-    def pose(self):
-        """
-        :rtype: Pose
-        """
-        return self._pose
-
-    @pose.setter
-    def pose(self, value):
-        self._pose = value
 
     @property
     def position(self):
         """
         :rtype: np.ndarray
         """
-        return np.array(self._pose.position.__getstate__()[:self._dim]) + np.random.uniform(low=-1., high=1.) * 0.00001
+        return np.array(self._pose.position.__getstate__()[:self._dim])
 
     @property
     def neighbour_names(self):
@@ -105,12 +97,15 @@ class dummy_uav(object):
         :param to_uav:
         """
         #  intention weight is the pick of the intention in a scale 0~1
+        rospy.logdebug("{}[{}] Running sum product algo".format(dt.datetime.fromtimestamp(rospy.Time.now().to_time()).
+                                                           strftime("%H:%M:%S"), self.name))
         weight_high = {
             "neighbors": 1.0,
             "unexplored": 0.3,
             "avoidcollision": 1.0,
             "boundary": 1.0,
             "tempchange": 0.6,
+            "humiditychange": 0.6,
             "humaninteresting": 0.5,
             "humanannoying": 0.9,
         }
@@ -120,6 +115,7 @@ class dummy_uav(object):
             "avoidcollision": 0.0,
             "boundary": 0.5,
             "tempchange": 0.1,
+            "humiditychange": 0.1,
             "humaninteresting": 0.0,
             "humanannoying":0.5,
         }
@@ -167,7 +163,7 @@ class dummy_uav(object):
             if self._phi.has_key(key):
                 own_belief += scale_dist(self._phi[key], low=weight_low[key], high=weight_high[key])
 
-        for key in ["tempchange", "humanannoying", "humaninteresting", "boundary"]:
+        for key in ["tempchange", "humiditychange", "humanannoying", "humaninteresting", "boundary"]:
             own_belief -= scale_dist(self._phi[key], low=weight_low[key], high=weight_high[key])
 
         for v in self.neighbour_names:
@@ -178,7 +174,7 @@ class dummy_uav(object):
                 tmp = other_neighbor + own_belief
                 self._msg_send[v] = scale_dist(tmp, as_prob=True)
 
-        for key in ["tempchange", "humanannoying", "humaninteresting", "boundary"]:
+        for key in ["tempchange", "humiditychange", "humanannoying", "humaninteresting", "boundary"]:
             own_belief += scale_dist(self._phi[key], low=weight_low[key], high=weight_high[key])
 
         key = "avoidcollision"
@@ -189,6 +185,9 @@ class dummy_uav(object):
         self._intention_fusion = scale_dist(res, as_prob=True)
 
     def fly(self):
+
+        rospy.logdebug("{}[{}] Run fly".format(dt.datetime.fromtimestamp(rospy.Time.now().to_time()).
+                                                                strftime("%H:%M:%S"), self.name))
         if self._dim == 2:
             x, y = self.position[:]
             dFdxy = np.array(np.gradient(self._intention_fusion), dtype=np.float)
@@ -213,7 +212,7 @@ class dummy_uav(object):
 
             if np.isclose(k, 0., atol=1.e-6):
                 rospy.logdebug("[{}]{} at optimum!".format(dt.datetime.fromtimestamp(rospy.Time.now().to_time()).
-                                                           strftime("%M:%S.%f"), self.name))
+                                                           strftime("%H:%M:%S"), self.name))
                 grad = np.random.uniform(-1, 1, self._dim)
                 k = np.sum(np.abs(grad))
             dx = (grad / k) #+ np.random.uniform(low=-1, high=1, size=dim)/100000.
@@ -246,7 +245,6 @@ class dummy_uav(object):
 
             np.set_printoptions(precision=3)
 
-
             grad = np.array([dFdx, dFdy, dFdz])
             k = np.sum(np.abs(grad))
 
@@ -259,21 +257,22 @@ class dummy_uav(object):
         old_pos = self.position
         goal = Pose()
         dx[np.random.random(self._dim) < 0.1] = 0.
-        new_pos = old_pos - dx
+        new_pos = old_pos - 2. * dx
         for i in range(len(new_pos)):
-            if round(new_pos[i]) < 0 or round(new_pos[i]) >= self._scale:
+            if round(new_pos[i]) < 0. or round(new_pos[i]) >= self._scale:
                 rospy.logdebug("[{}]{} Pushing out! grad={}".format(dt.datetime.fromtimestamp(
                     rospy.Time.now().to_time()).strftime("%M:%S.%f"), self.name, grad))
-        self.pose.position.x = new_pos[0]
-        self.pose.position.y = new_pos[1]
+        goal.position.x = new_pos[0]
+        goal.position.y = new_pos[1]
         if self._dim == 3:
-            self.pose.position.z = new_pos[2]
+            goal.position.z = new_pos[2]
+
         np.set_printoptions(precision=3)
         if self._dim == 2:
             rospy.logdebug(
                 "[{}]{}:{}->{} grad={} dx={}\ndfdxr[{},{}]={} dfdxn[{},{}]={} dfdx[{},{}]={}\ndfdyr[{},{}]={} "
                 "dfdyn[{},{}]={} dfdy[{},{}]={}".format(dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime(
-                    "%M:%S.%f")[:-4], self.name, old_pos[:], self.position[:], grad,dx,
+                    "%H:%M:%S"), self.name, old_pos[:], goal.position.__getstate__()[:], grad,dx,
                             xr, yr, dFdxy[1, yr, xr], xn, yn,dFdxy[1, yn, xn], x, y, dFdx,
                             xr, yr, dFdxy[0, yr, xr],xn, yn, dFdxy[0, yn, xn], x, y, dFdy)
             )
@@ -282,14 +281,12 @@ class dummy_uav(object):
                   "dfdyr[{},{},{}]={} dfdyn[{},{},{}]={} dfdy[{},{},{}]={}\n"
                   "dfdzr[{},{},{}]={} dfdzn[{},{},{}]={} dfdz[{},{},{}]={}".format(
                 dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime(
-                "%M:%S.%f")[:-4], self.name, old_pos[:], self.position[:], grad,dx,
+                "%H:%M:%S"), self.name, old_pos[:], goal.position.__getstate__()[:], grad,dx,
                 xr, yr, zr, dFdxy[1, yr, xr, zr], xn, yn, zn, dFdxy[1, yn, xn, zr], x, y, z, dFdx,
                 xr, yr, zr, dFdxy[0, yr, xr, zr], xn, yn, zn, dFdxy[0, yn, xn, zr], x, y, z, dFdy,
                 xr, yr, zr, dFdxy[2, yr, xr, zr], xn, yn, zn, dFdxy[2, yn, xn, zr], x, y, z, dFdz)
             )
-
         self._pub_goal_euclid.publish(goal)
-
 
     def callback(self, pdf_intention):
         """
@@ -309,15 +306,15 @@ class dummy_uav(object):
         """
         :type pose: Pose
         """
-        self.pose = pose
+        self._pose = pose
 
-    def callback_goal_reached(self, distance):
+    def callback_fly(self, msg_fly):
         """
-        :type distance: Float32
+        :type msg_fly: String
         """
-        rospy.logdebug("{} distance {}".format(self.name, distance))
-        if float(distance.data) < 0.5:
-            self.fly()
+        # listen to fly message.
+        if msg_fly.data == "fly":
+            self._solo_wants_to_fly = True
 
     def callback_phi_unexplored(self, pdf_unexplored):
         # :type pdf_unexplored: Belief
@@ -326,6 +323,10 @@ class dummy_uav(object):
     def callback_phi_temp_change(self, pdf_tempchange):
         # :type pdf_tempchange: Belief
         self._phi["tempchange"] = np.asanyarray(pdf_tempchange.data, dtype=np.float32).reshape(self._space)
+
+    def callback_phi_hum_change(self, pdf_humiditychange):
+        # :type pdf_humiditychange: Belief
+        self._phi["humiditychange"] = np.asanyarray(pdf_humiditychange.data, dtype=np.float32).reshape(self._space)
 
     def callback_phi_avoid_collision(self, pdf_avoid_collision):
         # :type pdf_avoid_collision: Belief
@@ -339,22 +340,46 @@ class dummy_uav(object):
         # :type pdf_avoid_collision: Belief
         self._phi["humanannoying"] = np.asanyarray(pdf_human_annoying.data, dtype=np.float32).reshape(self._space)
 
+    def callback_is_solo_ready(self, ready):
+        """
+        :type ready: Bool
+        """
+        self._solo_is_ready = ready.data
+
     def take_off(self, start_at):
         """
         uav rosnode launcher and intention publisher
         """
-
-        choice = raw_input("Start autonomous node? Press any letter").lower()
-        print("choice = ", choice)
-        print("Starting autonomouse mode......")
         rospy.init_node(self._name, log_level=rospy.DEBUG)
-        rate = rospy.Rate(2)
+
+        rospy.Subscriber("/solo/{}/ready".format(self._name), Bool, callback=self.callback_is_solo_ready)
+        rospy.Subscriber("/solo/{}/fly".format(self._name), String, callback=self.callback_fly)
+
+        rospy.logdebug("[{}]{} UAV autonomous waiting for solo to be ready".format(dt.datetime.fromtimestamp(
+            rospy.Time.now().to_time()).strftime("%H:%M:%S"), self._name, ))
+
+        while not self._solo_is_ready:
+            rospy.sleep(1)
+
+        rospy.logdebug("[{}]{} Solo is ready".format(dt.datetime.fromtimestamp(
+                rospy.Time.now().to_time()).strftime("%H:%M:%S"), self._name, ))
+
+        # choice = raw_input("Start autonomous node? yes/no:\n>> ").lower()
+        # while not choice == "yes":
+        #     choice = raw_input("Start autonomous node? yes/no:\n>> ").lower()
+        #     rospy.sleep(10)
+
+        rospy.logdebug("[{}]{} Starting Autonomouse mode......!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!".format(dt.datetime.fromtimestamp(
+            rospy.Time.now().to_time()).strftime("%H:%M:%S"), self.name))
+
+        rate = rospy.Rate(1)
         rospy.Subscriber("/solo/{}/pose_euclid".format(self._name), Pose, callback=self.callback_sensor_pose)
-        rospy.Subscriber("/solo/{}/distance_from_goal".format(self._name), Float32, callback=self.callback_goal_reached)
+        # rospy.Subscriber("/solo/{}/distance_from_goal".format(self._name), Float32, callback=self.callback_goal_reached)
 
         rospy.Subscriber("/PHI/{}/unexplored".format(self.name), numpy_msg(Belief), callback=self.callback_phi_unexplored)
         rospy.Subscriber("/PHI/{}/avoid_collision".format(self.name), numpy_msg(Belief), callback=self.callback_phi_avoid_collision)
         rospy.Subscriber("/PHI/{}/temp_change".format(self.name), numpy_msg(Belief), callback=self.callback_phi_temp_change)
+        rospy.Subscriber("/PHI/{}/humidity_change".format(self.name), numpy_msg(Belief), callback=self.callback_phi_hum_change)
 
         # if self.name == "B":
         #     rospy.Subscriber("/PHI/{}/human_interesting".format(self.name), numpy_msg(Belief), callback=self.callback_phi_human_interesting)
@@ -380,9 +405,12 @@ class dummy_uav(object):
         pub_outbox = rospy.Publisher(self.name + '/intention_sent', numpy_msg(Belief), queue_size=q_size)
 
         while not rospy.is_shutdown():
-            # if self.has_tmp_sensor:
-            #     rospy.Publisher(self.name + '/temp', numpy_msg(Belief), queue_size=q_size).publish(#not written yet)
             self.sum_product_algo2()
+
+            if self._solo_wants_to_fly:
+                self.fly()
+                self._solo_wants_to_fly = False
+
             for to_uav in self.neighbour_names:
                 msg = Belief()
                 msg.header.frame_id = "{}>{}".format(self.name, to_uav)
@@ -391,7 +419,7 @@ class dummy_uav(object):
                 pub_outbox.publish(msg)
 
             # ---------------------publishing own belief for visualization----------------------------------------------
-            pub_pose.publish(self.pose)
+            pub_pose.publish(self._pose)
             msg_viz = Belief()
             msg_viz.header.frame_id = self.name
             msg_viz.data = self._intention_fusion.ravel()

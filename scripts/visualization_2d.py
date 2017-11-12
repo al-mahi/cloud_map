@@ -199,7 +199,7 @@ class Visualization(object):
             cb.ax.set_xticklabels([np.min(t[ind]), np.max(t[ind])])
             return p
         else:
-            print("No update sent to {}".format(to_uav))
+            # print("No update sent to {}".format(to_uav))
             return unused_iterable[-1]
 
     def update_received_viz(self, num, unused_iterable, ax, from_uav, cax):

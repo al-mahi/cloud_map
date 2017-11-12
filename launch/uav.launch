@@ -42,8 +42,8 @@
             <!--&lt;!&ndash;separate neighbour names by _ ; If A had B,C neighbour value="B_C"&ndash;&gt;-->
             <!--<param name="neighbors" value="$(arg Cs_neighbors)"/>-->
         <!--</node>-->
-        <node name="T" pkg="dummy_cloud_map" type="visualize_Temp.py" respawn="false" output="screen">
-        </node>
+        <node name="T" pkg="cloud_map" type="visualize_Temp.py" respawn="false" output="screen"></node>
+        <node name="H" pkg="cloud_map" type="visualize_Humidity.py" respawn="false" output="screen"></node>
     </group>
 
     <group ns="PHI">
@@ -71,12 +71,12 @@
             <!--separate by underscore token-->
             <param name="intent" value="unexplored_tempchange_boundary_avoidcollision_humaninteresting_humanannoying"/>
         </node>
-        <!--<node name="B_temp_change" pkg="dummy_cloud_map" type="phiB_temp_change.py" respawn="false" output="screen">-->
-            <!--<param name="name" value="B"/>-->
-            <!--<param name="neighbors" value="$(arg Bs_neighbors)"/>-->
-            <!--&lt;!&ndash;separate by underscore token&ndash;&gt;-->
-            <!--<param name="intent" value="unexplored_tempchange_boundary_avoidcollision"/>-->
-        <!--</node>-->
+        <node name="B_hum_change" pkg="cloud_map" type="phiB_temp_change.py" respawn="false" output="screen">
+            <param name="name" value="B"/>
+            <param name="neighbors" value="$(arg Bs_neighbors)"/>
+            <!--separate by underscore token-->
+            <param name="intent" value="unexplored_tempchange_boundary_avoidcollision"/>
+        </node>
         <node name="B_avoid_collision" pkg="cloud_map" type="phiB_avoid_collision.py" respawn="false" output="screen">
             <param name="name" value="B"/>
             <param name="neighbors" value="$(arg Bs_neighbors)"/>
@@ -124,6 +124,10 @@
         <node name="A" pkg="cloud_map" type="temperature_phenomenon.py" respawn="false" output="screen">
             <param name="name" value="A"/>
             <param name="port" value="14555"/>
+        </node>
+        <node name="B" pkg="cloud_map" type="humidity_phenomenon.py" respawn="false" output="screen">
+            <param name="name" value="B"/>
+            <param name="port" value="15550"/>
         </node>
     </group>
 
