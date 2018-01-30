@@ -1,0 +1,93 @@
+<launch>
+    <!--dimension of the space 2 or 3-->
+    <arg name="dim" value="3"/>
+    <!--scale of the space-->
+    <arg name="scale" value="40"/>
+    <arg name="As_neighbors" value="B"/>
+    <arg name="Bs_neighbors" value="A_C"/>
+    <arg name="Cs_neighbors" value="B"/>
+    <!--<arg name="Cs_neighbors" value="A"/>-->
+    <param name="As_vendor" value="flightgear"/>
+    <param name="Bs_vendor" value="flightgear"/>
+    <param name="Cs_vendor" value="flightgear"/>
+
+    <param name="As_type" value="quad"/>
+    <param name="Bs_type" value="ufo"/>
+    <param name="Cs_type" value="quad"/>
+
+    <param name="As_instance" value="1"/>
+    <param name="Bs_instance" value="2"/>
+    <param name="Cs_instance" value="3"/>
+
+    <param name="dim" value="$(arg dim)"/>
+    <param name="scale" value="$(arg scale)"/>
+
+    <group ns="UAV">
+        <node name="A" pkg="cloud_map" type="uavA.py" respawn="false" output="screen">
+            <param name="name" value="A"/>
+            <param name="neighbors" value="$(arg As_neighbors)"/>
+        </node>
+        <node name="B" pkg="cloud_map" type="uavB.py" respawn="false" output="screen">
+            <param name="name" value="B"/>
+            <param name="neighbors" value="$(arg Bs_neighbors)"/>
+        </node>
+
+        <node name="C" pkg="cloud_map" type="uavC.py" respawn="false" output="screen">
+            <param name="name" value="C"/>
+            <param name="neighbors" value="$(arg Cs_neighbors)"/>
+        </node>
+
+        <node name="heart_bit_fly" pkg="cloud_map" type="heart_bit_fly.py" output="screen"></node>
+    </group>
+
+    <group ns="Visual">
+        <!--based on the dimension appropriate visualization will be generated-->
+        <!--<node name="A" pkg="cloud_map" type="visualize_uavA.py" respawn="false" output="screen">-->
+            <!--<param name="name" value="A"/>-->
+            <!--&lt;!&ndash;separate neighbour names by _ ; If A had B,C neighbour value="B_C"&ndash;&gt;-->
+            <!--<param name="neighbors" value="$(arg As_neighbors)"/>-->
+        <!--</node>-->
+        <node name="B" pkg="cloud_map" type="visualize_uavB.py" respawn="false" output="screen">
+            <param name="name" value="B"/>
+            <param name="neighbors" value="$(arg Bs_neighbors)"/>
+        </node>
+        <!--<node name="C" pkg="cloud_map" type="visualize_uavC.py" respawn="false" output="screen">-->
+            <!--<param name="name" value="C"/>-->
+            <!--&lt;!&ndash;separate neighbour names by _ ; If A had B,C neighbour value="B_C"&ndash;&gt;-->
+            <!--<param name="neighbors" value="$(arg Cs_neighbors)"/>-->
+        <!--</node>-->
+        <!--<node name="T" pkg="cloud_map" type="visualize_Temp.py" respawn="false" output="screen"></node>-->
+        <!--<node name="H" pkg="cloud_map" type="visualize_Humidity.py" respawn="false" output="screen"></node>-->
+    </group>
+
+
+    <group ns="flightgear">
+        <param name="port_send" value="41000"/>
+        <param name="port_recv" value="41100"/>
+        <node name="A" pkg="cloud_map" type="fgA.py" respawn="false" output="screen"></node>
+        <node name="B" pkg="cloud_map" type="fgB.py" respawn="false" output="screen"></node>
+        <node name="C" pkg="cloud_map" type="fgC.py" respawn="false" output="screen"></node>
+    </group>
+    <group ns="fg_launcher">
+        <node name="A" pkg="cloud_map" type="fgALauncher.py" respawn="false" output="screen"></node>
+        <node name="B" pkg="cloud_map" type="fgBLauncher.py" respawn="false" output="screen"></node>
+        <node name="C" pkg="cloud_map" type="fgCLauncher.py" respawn="false" output="screen"></node>
+    </group>
+    <group ns="fg_interface">
+        <node name="A" pkg="cloud_map" type="fgA_pid.py" respawn="false" output="screen"></node>
+        <node name="B" pkg="cloud_map" type="fgB_pid.py" respawn="false" output="screen"></node>
+        <node name="C" pkg="cloud_map" type="fgC_pid.py" respawn="false" output="screen"></node>
+    </group>
+
+    <!--<group ns="Sensors">-->
+        <!--<node name="A" pkg="cloud_map" type="temperature_phenomenon.py" respawn="false" output="screen">-->
+            <!--<param name="name" value="A"/>-->
+            <!--<param name="instance" value="1"/>-->
+        <!--</node>-->
+        <!--<node name="B" pkg="cloud_map" type="humidity_phenomenon.py" respawn="false" output="screen">-->
+            <!--<param name="name" value="B"/>-->
+            <!--<param name="instance" value="2"/>-->
+        <!--</node>-->
+    <!--</group>-->
+
+</launch>

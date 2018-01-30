@@ -1,3 +1,3 @@
 #!/usr/bin/python
 import phi
-phi.phi_temperature_node("B")
+phi.phi_humidity_node("B")

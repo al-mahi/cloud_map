@@ -14,7 +14,7 @@ import time
 import datetime as dt
 
 
-class solo_2d(object):
+class solo_3dr(object):
     def __init__(self, name, port, scale, dim):
         """
         :param port: port number of solo controller to connect
@@ -105,7 +105,7 @@ class solo_2d(object):
                     rospy.Time.now().to_time()).strftime("%H:%M:%S")))
                 break
             pub_ready.publish(Bool(False))
-            rospy.sleep(10)
+            rospy.sleep(8)
 
         self._goal_euclid = Pose(Point(start_at_euclid[0], start_at_euclid[1], start_at_euclid[2]), Quaternion(
             *quaternion_from_euler(0., 0., 0.)))
@@ -179,7 +179,7 @@ class solo_2d(object):
                     dronekit.LocationGlobalRelative(
                         lat=self._goal_gps.position.y, lon=self._goal_gps.position.x, alt=self._goal_gps.position.z
                     ),
-                    groundspeed=2.
+                    groundspeed=4.
                 )
 
                 reached_lon = np.isclose(self._goal_gps.position.x, self._vehicle.location.global_relative_frame.lon,
@@ -299,5 +299,13 @@ class solo_2d(object):
         self._vehicle.close()
 
     def callback_loiter(self, msg):
-        rospy.logdebug("{}Mode Loiter".format(self._tag))
+        """
+        :type msg: String
+        :return:
+        """
+        rospy.logdebug("{}Mode {}".format(self._tag, msg.data))
         self._vehicle.mode = dronekit.VehicleMode("LOITER")
+
+        if msg.data=="GUIDED":
+            self._vehicle.mode = dronekit.VehicleMode("GUIDED")
+            rospy.logdebug("{}Change Mode {}".format(self._tag, msg.data))

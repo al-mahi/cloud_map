@@ -22,7 +22,8 @@ class dummy_uav(object):
         self._pose = Pose(Point(0., 0., 0.), Quaternion(*quaternion_from_euler(0., 0., 0.)))
         self._vel = Twist(Vector3(1., 0., 0.), Vector3(0., 0., 0.))
         self._stall_vel = 1.0
-        self._defined_intention_keys = ["boundary", "unexplored", "tempchange", "avoidcollision", "humaninteresting", "humanannoying", "humiditychange"]
+        self._defined_intention_keys = ["boundary", "unexplored", "tempchange", "avoidcollision", "humaninteresting",
+                                        "humanannoying", "humiditychange"]
         # self._neighbors_intention_keys = ["boundary", "unexplored", "tempchange"]
         self._decay_explored = .3
         self._decay_belief = .3
@@ -36,7 +37,6 @@ class dummy_uav(object):
         for key in self._defined_intention_keys:
             self._phi[key] = np.zeros(self._space)
         self._pub_goal_euclid = rospy.Publisher("/UAV/{}/next_way_point_euclid".format(self._name), data_class=Pose, queue_size=10)
-
         self._solo_is_ready = False
         self._solo_wants_to_fly = False
 
@@ -89,6 +89,10 @@ class dummy_uav(object):
         self._defined_intention_keys = value
         for key in value:
             self._phi[key] = np.zeros(self._space)
+
+    @property
+    def tag(self):
+        return "{}[{}]".format(self._name, dt.datetime.fromtimestamp(rospy.Time.now().to_time()). strftime("%H:%M:%S"))
 
     def sum_product_algo2(self):
         """
@@ -357,8 +361,8 @@ class dummy_uav(object):
         while not self._solo_is_ready:
             rospy.sleep(1)
 
-        rospy.logdebug("[{}]{} Solo is ready".format(dt.datetime.fromtimestamp(
-                rospy.Time.now().to_time()).strftime("%H:%M:%S"), self._name, ))
+        rospy.logdebug("[{}]{} {} is ready".format(dt.datetime.fromtimestamp(
+                rospy.Time.now().to_time()).strftime("%H:%M:%S"), self._name, vendor ))
 
         # choice = raw_input("Start autonomous node? yes/no:\n>> ").lower()
         # while not choice == "yes":
@@ -369,8 +373,7 @@ class dummy_uav(object):
             rospy.Time.now().to_time()).strftime("%H:%M:%S"), self.name))
 
         rate = rospy.Rate(1)
-        rospy.Subscriber("/" + vendor + "/{}/pose_euclid".format(self._name), Pose, callback=self.callback_sensor_pose)
-        # rospy.Subscriber("/solo/{}/distance_from_goal".format(self._name), Float32, callback=self.callback_goal_reached)
+        rospy.Subscriber("/{}/{}/pose_euclid".format(vendor, self._name), Pose, callback=self.callback_sensor_pose)
 
         rospy.Subscriber("/PHI/{}/unexplored".format(self.name), numpy_msg(Belief), callback=self.callback_phi_unexplored)
         rospy.Subscriber("/PHI/{}/avoid_collision".format(self.name), numpy_msg(Belief), callback=self.callback_phi_avoid_collision)
@@ -435,7 +438,7 @@ def launch_uav(name, start_at):
     dim = int(rospy.get_param("/dim"))
     scale = int(rospy.get_param("/scale"))
     uav = dummy_uav(name=name, dim=dim, scale=scale)
-    uav.defined_intention_keys = rospy.get_param("/PHI/" + name + "/intent").split('_')
+    # uav.defined_intention_keys = rospy.get_param("/PHI/" + name + "/intent").split('_')
 
     neighbors = []
     if rospy.has_param("/UAV/" + name + "/neighbors"):

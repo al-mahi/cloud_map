@@ -93,11 +93,15 @@ class VisualizeHumidity(object):
         grad = np.gradient(self._inferred_humidity)
         if self._dim == 3: self._phi_humidity_change = np.sqrt(grad[0]**2 + grad[1]**2 + grad[2]**2)
         if self._dim == 2: self._phi_humidity_change = np.sqrt(grad[0]**2 + grad[1]**2)
-        # self._phi_humidity_change = np.nan_to_num(self._phi_humidity_change)
         self._phi_humidity_change /= np.sum(self._phi_humidity_change)
-        # print("{}\nnan count ={}".format(self._name, np.count_nonzero(np.isnan(self._measured_humidity))))
         self._phi_humidity_change = np.nan_to_num(self._phi_humidity_change)
         self._phi_humidity_change = 1. - self._phi_humidity_change
+
+    def update_all(self, num, unused_iterable, fig, ax_measured, cax_measured, ax_grad, ax_infer, cax_infer, ax_ver):
+        self.update_measured_viz(num, unused_iterable, ax_measured, cax_measured)
+        self.update_gradient_viz(num, unused_iterable, ax_grad)
+        self.update_inferred_viz(num, unused_iterable, ax_infer, cax_infer)
+        self.update_vertical_viz(num, unused_iterable, ax_ver)
 
     def update_gradient_viz(self, num, unused_iterable, ax):
         """
@@ -115,11 +119,9 @@ class VisualizeHumidity(object):
             ax.set_zlim3d([0.0, float(self._scale)])
         except ValueError:
             pass
-
         ax.set_xlabel('Y')
         ax.set_ylabel('X')
         ax.set_zlabel('Z')
-
         ax.set_xticks([])
         ax.set_yticks([])
         F = self._phi_humidity_change
@@ -212,12 +214,17 @@ class VisualizeHumidity(object):
         cax2 = fig.add_axes([.01, .15, .01, .25])
 
         ind = 0
-        interval = 300
+        interval = 1000
         anims = [None, None, None, None, None]
-        anims[0] = animation.FuncAnimation(fig, self.update_measured_viz, 1000, fargs=(unused, ax1measured, cax1),interval=interval, blit=False)
-        anims[1] = animation.FuncAnimation(fig, self.update_inferred_viz, 1000, fargs=(unused, ax2inferred, cax2),interval=interval, blit=False)
-        anims[2] = animation.FuncAnimation(fig, self.update_gradient_viz, 1000, fargs=(unused, ax3gradient),interval=interval, blit=False)
-        anims[3] = animation.FuncAnimation(fig, self.update_vertical_viz, 1000, fargs=(unused, ax4vertical),interval=interval, blit=False)
+        anims = [None]
+        # TODO make one FuncAnimation call pass all axis to it
+        anims[0] = animation.FuncAnimation(
+            fig, self.update_all, 10000, fargs=(
+                unused, fig, ax1measured, cax1, ax3gradient, ax2inferred, cax2, ax4vertical),interval=interval, blit=False, repeat=False)
+        # anims[0] = animation.FuncAnimation(fig, self.update_measured_viz, 10000, fargs=(unused, ax1measured, cax1),interval=interval, blit=False, repeat=False)
+        # anims[1] = animation.FuncAnimation(fig, self.update_inferred_viz, 10000, fargs=(unused, ax2inferred, cax2),interval=interval, blit=False, repeat=False)
+        # anims[2] = animation.FuncAnimation(fig, self.update_gradient_viz, 10000, fargs=(unused, ax3gradient),interval=interval, blit=False, repeat=False)
+        # anims[3] = animation.FuncAnimation(fig, self.update_vertical_viz, 10000, fargs=(unused, ax4vertical),interval=interval, blit=False, repeat=False)
 
         plt.show()
         while not rospy.is_shutdown():

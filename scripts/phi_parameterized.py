@@ -29,14 +29,10 @@ class Unexplored(object):
         self._phi_unexplored_norm = np.zeros(self._space)
         self._high = 1./self._scale
 
-    @property
-    def tag(self):
-        return "{}[{}]".format(self._name, dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%H:%M:%S"))
-
     def callback_pose(self, pose):
         """
         :type pose: Pose
-        :return: 
+        :return:
         """
         try:
             x, y, z = map(int, map(round, pose.position.__getstate__()[:]))
@@ -50,7 +46,8 @@ class Unexplored(object):
                 self._phi_unexplored[y, x, z] = val
             self._phi_unexplored_norm = self._phi_unexplored / np.sum(self._phi_unexplored)
         except IndexError as ex:
-            rospy.logerr("{} Index error {}".format(self.tag,ex.message))
+            rospy.logerr("{}[{}] Index error {}".format(self._name, self._tag, dt.datetime.fromtimestamp(
+                rospy.Time.now().to_time()).strftime("%H:%M:%S")), ex.message)
 
     def start(self):
         rospy.init_node(self._name, log_level=rospy.DEBUG)

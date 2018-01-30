@@ -48,6 +48,16 @@ find_package(catkin REQUIRED COMPONENTS
  add_message_files(
    FILES
    Belief.msg
+   command_data.msg
+   sensor_data.msg
+   orientation_euler.msg
+   temperature.msg
+   humidity.msg
+   CO_2.msg
+   geo_location.msg
+   euclidean_location.msg
+   twist_ms.msg
+   twist_euclid.msg
 #   Message2.msg
  )
 
