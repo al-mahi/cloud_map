@@ -29,7 +29,7 @@ def shifted_position(lat, long, NS, EW):  # takes a lat/long and a North/South a
 
 def arm_and_takeoff(veh_num, aTargetAltitude):
     """
-    Arms vehicle and fly to aTargetAltitude (in meters).
+    Arms vehicle and fly_grad to aTargetAltitude (in meters).
     """
     print
     print "vehicle %s:" % (veh_num)

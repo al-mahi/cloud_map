@@ -278,6 +278,7 @@ class Visualization(object):
         tmp = np.asanyarray(pdf_intention.data).reshape(self.d, self.d, self.d)
         # after intorucing the walls. assign zeros to walls instead of high value so that they dont block the
         # visualization of the actual dist.
+        th = 3
         tmp[0, :, :] = tmp[:, 0, :] = tmp[:, :, 0] = 0.
         tmp[self.d-1, :, :] = tmp[:, self.d-1, :] = tmp[:, :, self.d-1] = 0.
         self._intention_sent[pdf_intention.header.frame_id[2]] = tmp

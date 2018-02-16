@@ -72,7 +72,7 @@ class SenseHumidity(object):
                 pub_A.publish(self._true_hum_A)
                 pub_B.publish(self._true_hum_B)
                 pub_C.publish(self._true_hum_C)
-            # rospy.logdebug("B_HUM[{}]@{}:{}".format(dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime(
+            # rospy.logdebug("B_HUM[{}]@{}:{}".format(del_t.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime(
             #     "%H:%M:%S"), self._pose_B.position.__getstate__()[:], self._true_hum_B))
             rate.sleep()
 

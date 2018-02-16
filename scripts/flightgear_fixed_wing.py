@@ -80,10 +80,10 @@ class flightgear_fixed_wing(object):
     def arm_and_takeoff(self, start_at_euclid=None):
         """
         Init ROS node.
-        Arms vehicle and fly to aTargetAltitude (in meters).
+        Arms vehicle and fly_grad to aTargetAltitude (in meters).
         """
         rospy.init_node(self._name, log_level=rospy.DEBUG)
-        rate = rospy.Rate(10)
+        rate = rospy.Rate(1)
         # longitude EW = x axis and latitude NS = y axis
         # send solo to initial location
         print('center = ', self._center_lat, self._center_lon, self._center_alt)
@@ -104,7 +104,7 @@ class flightgear_fixed_wing(object):
                 break
             rospy.logdebug("{} Waiting....\npose read....\n{}".format(self.tag, pose))
             rospy.sleep(5)
-        wait = 20
+        wait = 15
         while wait > 0:
             rospy.logdebug("{} Waiting....{}".format(self.tag, wait))
             wait -= 5
@@ -197,10 +197,10 @@ class flightgear_fixed_wing(object):
             self._goal_euclid = goal_euclid
             # longitude EW = x axis and latitude NS = y axis, E is +x, N is +y
             self._goal_gps = self.euclid_to_geo(NS=goal_euclid.y, EW=goal_euclid.x, UD=goal_euclid.z)
-            rospy.logdebug("{}New Goal (x,y,z)=({},{},{}) (lat,long,alt)=({},{},{})".format(
-                self.tag, self._goal_euclid.y, self._goal_euclid.x, self._goal_euclid.z,
-                self._goal_gps.latitude, self._goal_gps.longitude, self._goal_gps.altitude)
-            )
+            # rospy.logdebug("{}New Goal (x,y,z)=({},{},{}) (lat,long,alt)=({},{},{})".format(
+            #     self.tag, self._goal_euclid.x, self._goal_euclid.y, self._goal_euclid.z,
+            #     self._goal_gps.latitude, self._goal_gps.longitude, self._goal_gps.altitude)
+            # )
         else:
             rospy.logdebug("{} No goal waypoint received yet.".format(self.tag))
 

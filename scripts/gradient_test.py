@@ -80,7 +80,7 @@ class uav(object):
         nx, ny, nz = x-sx-1, y-sy-1, z-sz-1
         # todo more debuggin required here because the plot is not convincing
         print("{} pos {}".format(self.name, self.position))
-        # where to fly. find the optimum in intention dist of the inverse
+        # where to fly_grad. find the optimum in intention dist of the inverse
         local_gradient = np.array(np.gradient(1.-local_dist), dtype=np.float32)
         gradient = local_gradient[:, nx, ny, nz]
         print("{} grad {}".format(self.name, gradient))

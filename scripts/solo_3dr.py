@@ -60,7 +60,7 @@ class solo_3dr(object):
     def arm_and_takeoff(self, start_at_euclid=None):
         """
         Init ROS node.
-        Arms vehicle and fly to aTargetAltitude (in meters).
+        Arms vehicle and fly_grad to aTargetAltitude (in meters).
         """
         rospy.init_node(self._name, log_level=rospy.DEBUG)
         rospy.logdebug("{}[{}] init node max (lon, lat, alt)=({},{},{})".format(self._tag,
@@ -162,9 +162,9 @@ class solo_3dr(object):
 
         self._pub_pose_gps = rospy.Publisher(self._name + '/pose_gps', data_class=Pose, queue_size=10)
         self._pub_pose_euclid = rospy.Publisher(self._name + '/pose_euclid', data_class=Pose, queue_size=10)
-        pub_fly = rospy.Publisher("{}/fly".format(self._name), data_class=String, queue_size=10)
+        pub_fly = rospy.Publisher("{}/fly_grad".format(self._name), data_class=String, queue_size=10)
 
-        pub_fly.publish("fly")
+        pub_fly.publish("fly_grad")
 
         while not rospy.is_shutdown():
             pose_gps = Pose()
@@ -222,7 +222,7 @@ class solo_3dr(object):
             else:
                 rospy.logdebug("{}[{}]Waiting for new goal".format(self._tag, dt.datetime.fromtimestamp(
                     rospy.Time.now().to_time()).strftime("%H:%M:%S")))
-                pub_fly.publish("fly")
+                pub_fly.publish("fly_grad")
 
             rate.sleep()
 

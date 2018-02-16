@@ -58,6 +58,7 @@ find_package(catkin REQUIRED COMPONENTS
    euclidean_location.msg
    twist_ms.msg
    twist_euclid.msg
+   path_history.msg
 #   Message2.msg
  )
 

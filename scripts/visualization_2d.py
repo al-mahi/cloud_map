@@ -222,7 +222,7 @@ class Visualization(object):
         ax.set_xticks([])
         ax.set_yticks([])
 
-        # ax.set_title("{}<--{}#{}-{}".format(self.name, from_uav, num,dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%.f")), fontsize=10)
+        # ax.set_title("{}<--{}#{}-{}".format(self.name, from_uav, num,del_t.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%.f")), fontsize=10)
 
         ax.text(self.pose[0], self.pose[1], self.name)
         for nm in self.neighbor_names:

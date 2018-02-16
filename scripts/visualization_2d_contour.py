@@ -224,7 +224,7 @@ class Visualization(object):
         ax.set_xticks([])
         ax.set_yticks([])
 
-        # ax.set_title("{}<--{}#{}-{}".format(self.name, from_uav, num,dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%.f")), fontsize=10)
+        # ax.set_title("{}<--{}#{}-{}".format(self.name, from_uav, num,del_t.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%.f")), fontsize=10)
 
         ax.text(self.pose[1], self.pose[0], self.name)
         for nm in self.neighbor_names:
@@ -233,8 +233,8 @@ class Visualization(object):
                 ax.text(p2[1], p2[0], nm)
 
         if self._intention_received.has_key(from_uav):
-            # ax.set_title("{}<{}#{}-T1-{}-T0-{}".format(self.name, from_uav, num,dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%f"),
-            #                                            dt.datetime.fromtimestamp(self._intention_received[from_uav].header.stamp.to_time()).strftime("%M:%S.%f")), fontsize=10)
+            # ax.set_title("{}<{}#{}-T1-{}-T0-{}".format(self.name, from_uav, num,del_t.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%M:%S.%f"),
+            #                                            del_t.datetime.fromtimestamp(self._intention_received[from_uav].header.stamp.to_time()).strftime("%M:%S.%f")), fontsize=10)
             ax.set_title("{}<{}#{}".format(self.name, from_uav, num), fontsize=10)
             t = np.asanyarray(self._intention_received[from_uav].data).reshape(self.scale, self.scale)
             x, y = np.meshgrid(np.arange(0, self.scale, 1.), np.arange(0, self.scale, 1.))

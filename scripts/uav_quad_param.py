@@ -241,7 +241,7 @@ class dummy_uav(object):
 
         vendor = rospy.get_param('/{}s_vendor'.format(self._name))
         rospy.Subscriber("/{}/{}/ready".format(vendor, self._name), Bool, callback=self.callback_is_robot_ready)
-        # rospy.Subscriber("/" + vendor + "/{}/fly".format(self._name), String, callback=self.callback_fly)
+        # rospy.Subscriber("/" + vendor + "/{}/fly_grad".format(self._name), String, callback=self.callback_fly)
 
         rospy.logdebug("{} UAV autonomous waiting for {} to be ready".format(self.tag, vendor))
 
@@ -298,7 +298,7 @@ class dummy_uav(object):
 
         while not rospy.is_shutdown():
             # self.sum_product_algo2()
-            # self.fly()
+            # self.fly_grad()
             # ---------------------publishing own belief for visualization----------------------------------------------
             pub_pose.publish(self._pose)
             # msg_viz = Belief()

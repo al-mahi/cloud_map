@@ -311,8 +311,8 @@ class dummy_uav(object):
         """
         :type msg_fly: String
         """
-        # listen to fly message.
-        if msg_fly.data == "fly":
+        # listen to fly_grad message.
+        if msg_fly.data == "fly_grad":
             self._solo_wants_to_fly = True
 
     def callback_phi_unexplored(self, pdf_unexplored):
@@ -353,7 +353,7 @@ class dummy_uav(object):
 
         vendor = rospy.get_param('/{}s_vendor'.format(self._name))
         rospy.Subscriber("/" + vendor + "/{}/ready".format(self._name), Bool, callback=self.callback_is_robot_ready)
-        rospy.Subscriber("/" + vendor + "/{}/fly".format(self._name), String, callback=self.callback_fly)
+        rospy.Subscriber("/" + vendor + "/{}/fly_grad".format(self._name), String, callback=self.callback_fly)
 
         rospy.logdebug("[{}]{} UAV autonomous waiting for {} to be ready".format(dt.datetime.fromtimestamp(
             rospy.Time.now().to_time()).strftime("%H:%M:%S"), self._name, vendor))

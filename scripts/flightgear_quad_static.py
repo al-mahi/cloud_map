@@ -67,7 +67,7 @@ class flightgear_quad_static(object):
     def arm_and_takeoff(self, start_at_euclid=None):
         """
         Init ROS node.
-        Arms vehicle and fly to aTargetAltitude (in meters).
+        Arms vehicle and fly_grad to aTargetAltitude (in meters).
         """
         rospy.init_node(self._name, log_level=rospy.DEBUG)
         rate = rospy.Rate(1)
@@ -106,12 +106,11 @@ class flightgear_quad_static(object):
         rospy.logdebug("{} Ready\npose read:\n{}".format(self.tag, pose))
         # rospy.Subscriber("/UAV/{}/next_way_point_euclid".format(self._name), data_class=Pose,
         #                  callback=self.callback_next_euclidean_way_point)
-        #
         self._pub_pose_gps = rospy.Publisher(self._name + '/pose_gps', data_class=geo_location, queue_size=10)
         self._pub_pose_euclid = rospy.Publisher(self._name + '/pose_euclid', data_class=euclidean_location, queue_size=10)
-        # pub_fly = rospy.Publisher("{}/fly".format(self._name), data_class=String, queue_size=10)
-        #
-        # pub_fly.publish("fly")
+
+        # pub_fly = rospy.Publisher("{}/fly_grad".format(self._name), data_class=String, queue_size=10)
+        # pub_fly.publish("fly_grad")
 
         self._pose_gps.header.frame_id = self._name
 
@@ -150,7 +149,7 @@ class flightgear_quad_static(object):
             #     else:
             #         pos_eu = self.pose_in_euclid()
             #         rospy.logdebug("{}[{}]@(lon,lat,alt)=({},{},{}) goal({},{},{}) dif=({},{},{}) @(x,y,z)=({},{},{}) goal_eu=({},{},{})".format(
-            #             self._tag, dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%H:%M:%S"),
+            #             self._tag, del_t.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%H:%M:%S"),
             #             self.gps_loc.position.x,
             #             self.gps_loc.position.y,
             #             self.gps_loc.position.z,
@@ -161,9 +160,9 @@ class flightgear_quad_static(object):
             #         pub_fly.publish("wait")
             #
             # else:
-            #     rospy.logdebug("{}[{}]Waiting for new goal".format(self._tag, dt.datetime.fromtimestamp(
+            #     rospy.logdebug("{}[{}]Waiting for new goal".format(self._tag, del_t.datetime.fromtimestamp(
             #         rospy.Time.now().to_time()).strftime("%H:%M:%S")))
-            #     pub_fly.publish("fly")
+            #     pub_fly.publish("fly_grad")
 
             rate.sleep()
 

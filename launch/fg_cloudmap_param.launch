@@ -2,9 +2,9 @@
     <!--dimension of the space 2 or 3-->
     <arg name="dim" value="3"/>
     <!--scale of the space-->
-    <arg name="scale" value="40"/>
+    <arg name="scale" value="50"/>
     <arg name="As_neighbors" value="B"/>
-    <arg name="Bs_neighbors" value="A_C"/>
+    <arg name="Bs_neighbors" value=""/>
     <arg name="Cs_neighbors" value="B"/>
     <!--<arg name="Cs_neighbors" value="A"/>-->
     <param name="As_vendor" value="flightgear"/>
@@ -64,19 +64,19 @@
     <group ns="flightgear">
         <param name="port_send" value="41000"/>
         <param name="port_recv" value="41100"/>
-        <node name="A" pkg="cloud_map" type="fgA.py" respawn="false" output="screen"></node>
+        <!--<node name="A" pkg="cloud_map" type="fgA.py" respawn="false" output="screen"></node>-->
         <node name="B" pkg="cloud_map" type="fgB.py" respawn="false" output="screen"></node>
-        <node name="C" pkg="cloud_map" type="fgC.py" respawn="false" output="screen"></node>
+        <!--<node name="C" pkg="cloud_map" type="fgC.py" respawn="false" output="screen"></node>-->
     </group>
     <group ns="fg_launcher">
-        <node name="A" pkg="cloud_map" type="fgALauncher.py" respawn="false" output="screen"></node>
+        <!--<node name="A" pkg="cloud_map" type="fgALauncher.py" respawn="false" output="screen"></node>-->
         <node name="B" pkg="cloud_map" type="fgBLauncher.py" respawn="false" output="screen"></node>
-        <node name="C" pkg="cloud_map" type="fgCLauncher.py" respawn="false" output="screen"></node>
+        <!--<node name="C" pkg="cloud_map" type="fgCLauncher.py" respawn="false" output="screen"></node>-->
     </group>
     <group ns="fg_interface">
-        <node name="A" pkg="cloud_map" type="fgA_pid.py" respawn="false" output="screen"></node>
+        <!--<node name="A" pkg="cloud_map" type="fgA_pid.py" respawn="false" output="screen"></node>-->
         <node name="B" pkg="cloud_map" type="fgB_pid.py" respawn="false" output="screen"></node>
-        <node name="C" pkg="cloud_map" type="fgC_pid.py" respawn="false" output="screen"></node>
+        <!--<node name="C" pkg="cloud_map" type="fgC_pid.py" respawn="false" output="screen"></node>-->
     </group>
 
     <!--<group ns="Sensors">-->

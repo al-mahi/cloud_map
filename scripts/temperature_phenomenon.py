@@ -73,7 +73,7 @@ class SenseTemperature(object):
                 pub_A.publish(self._true_tmp_A)
                 pub_B.publish(self._true_tmp_B)
                 pub_C.publish(self._true_tmp_C)
-            # rospy.logdebug("A_TMP[{}]@{}:{}".format(dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime(
+            # rospy.logdebug("A_TMP[{}]@{}:{}".format(del_t.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime(
             #     "%H:%M:%S"), self._pose_A.position.__getstate__()[:], self._true_tmp_A))
             rate.sleep()
 
