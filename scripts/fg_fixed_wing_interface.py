@@ -43,6 +43,7 @@ class PID:
             self.e_i = self.e_i + (self.del_t / self.k_i) * (u_sat - u_unsat)
         return u_sat
 
+
 def saturate(u_in, limit):
     if u_in < -limit:
         u = -limit
@@ -228,15 +229,16 @@ class fg_fw_interface(object):
 
             max_delta_lat, max_delta_lon = 0.00144194768199/10, 0.00177704227973/10
 
-            max_aileron = 0.8
+            max_aileron = 0.6
             max_elevator = 0.2
             max_throttle = 0.002
 
-            kp_alerion = 0.6/180.
+            kp_alerion = 1./360.
+            # kp_alerion = 5.0/180.
             kp_throttle = 0.0
             kp_elevator = 0.1
 
-            kd_alerion = 2.0
+            kd_alerion = 0.01
             kd_throttle = 0.0
             kd_elevator = 0.0
 
@@ -249,20 +251,24 @@ class fg_fw_interface(object):
             if dalt < 0: elevator = min( max_elevator,  output)
 
             err_theta = ((Bearing - heading + 360) % 360)
-            der_theta = err_theta - self._previous_error_deg
-            self._previous_error_deg = err_theta
-            turn = kp_alerion * err_theta + kd_alerion * der_theta
-            if turn > err_theta - 180: aileron = max(-turn, -max_aileron)
-            if turn < err_theta - 180: aileron = min( turn, max_aileron)
+            if err_theta < 180:
+                der_theta = err_theta - self._previous_error_deg
+                turn = kp_alerion * err_theta + kd_alerion * der_theta
+                aileron = min(turn, max_aileron)
+            if err_theta > 180:
+                der_theta = (360. - err_theta) - self._previous_error_deg
+                turn = kp_alerion * (360 - err_theta) + kd_alerion * der_theta
+                aileron = max(-turn, -max_aileron)
+            print "i={:05} yw={:3.2f} g={:3.2f} err={:3.2f} prv={:3.2f} der_theta={:1.2f} kp*err={:1.2f} kd*der={:1.2f} turn={:1.2f} ail={:1.2f}".format(
+                i, heading, Bearing, err_theta, self._previous_error_deg,  der_theta, kp_alerion * err_theta, kd_alerion * der_theta, turn, aileron)
 
             i += 1
             if i > 1000:
                 throttle = 0.00001  # fix aileron first
                 elevator = -0.0000001
                 # aileron = 0.05
-            print "i={} head={} Bear={} e_theta={} kp*err={} kd*der={} turn={} der_theta={} ail={}".format(i, heading, Bearing, err_theta, kp_alerion * err_theta, kd_alerion * der_theta, turn, der_theta, aileron)
+
             commands = {"throttle":throttle, "elevator": elevator, "aileron": aileron, "rudder": 0.0}
             sim.FGSend(commands)
             pub_sensor.publish(sensor)
             rate.sleep()
-
