@@ -1,6 +1,7 @@
 #!/usr/bin/python
 import rospy
-import visualization_3d as viz3
+# import visualization_3d as viz3
+import visualization_3d_param as viz3
 import visualization_2d as viz2
 import visualization_2d_contour as viz2cont
 import visualization_2d_surface as viz2surf

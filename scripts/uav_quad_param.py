@@ -108,7 +108,7 @@ class dummy_uav(object):
         """
         :rtype: np.ndarray
         """
-        return np.array(self._pose.__getstate__()[:self._dim])
+        return np.array(self._pose.__getstate__()[1:])
 
     @property
     def neighbour_names(self):
@@ -290,7 +290,7 @@ class dummy_uav(object):
         #     rospy.Subscriber(name='/{}/{}/vel_euclid'.format(vendor, from_uav), callback=self.callback_geo_location,
         #                      data_class=twist_euclid)
         #
-        # self._pose = euclidean_location()
+        self._pose = euclidean_location()
         q_size = 10
         # # fix3d
         pub_pose = rospy.Publisher(self.name + '/pose', data_class=euclidean_location, queue_size=q_size)

@@ -77,27 +77,31 @@ class dummy_uav(object):
 
     def phi_avoid_collision(self, indices):
         """:rtype np.ndarray"""
-        # res = np.zeros(shape=self._space)
-        # fgx, fgy, fgz = self._pose.x, self._pose.y, self._pose.z
-        # for nbnm in self.neighbour_names:
-        #     nb = self._param_q[nbnm]
-        #     vel = self._vel_euclid
-        #     f1x, f1y, f1z = nb.pose_euclid.x, nb.pose_euclid.y, nb.pose_euclid.z
-        #     f2x = (fgx + (vel.x / 10.) * (f1x - fgx))
-        #     f2y = (fgy + (vel.y / 10.) * (f1y - fgy))
-        #     f2z = (fgz + (vel.z / 02.) * (f1z - fgz))
-        #
-        #     def distance(arr):
-        #         d1 = np.sqrt((arr[0] - f1x) ** 2. + (arr[1] - f1y) ** 2. + (arr[2] - f1z) ** 2.)
-        #         d2 = np.sqrt((arr[0] - f2x) ** 2. + (arr[1] - f2y) ** 2. + (arr[2] - f2z) ** 2.)
-        #         return d1 + d2
-        #
-        #     indices = np.ndindex(self._space)
-        #     F = np.array(map(distance, indices), dtype=np.float32).reshape(self._space)
-        #     F = 1. / F
-        #     res += F
-        # return res
-        return np.zeros(self._space)
+        res = np.zeros(shape=self._space)
+        fgx, fgy, fgz = self._pose.x, self._pose.y, self._pose.z
+        for nbnm in self.neighbour_names:
+            F = np.zeros(self._space)
+            nb = self._param_q[nbnm]
+            vel = self._vel_euclid
+            f1x, f1y, f1z = nb.pose_euclid.x, nb.pose_euclid.y, nb.pose_euclid.z
+            f2x = (fgx + (vel.x / 10.) * (f1x - fgx))
+            f2y = (fgy + (vel.y / 10.) * (f1y - fgy))
+            f2z = (fgz + (vel.z / 02.) * (f1z - fgz))
+
+            def distance(arr):
+                d1 = np.sqrt((arr[0] - f1x) ** 2. + (arr[1] - f1y) ** 2. + (arr[2] - f1z) ** 2.)
+                d2 = np.sqrt((arr[0] - f2x) ** 2. + (arr[1] - f2y) ** 2. + (arr[2] - f2z) ** 2.)
+                return d1 + d2
+
+            # indices = np.ndindex(self._space)
+            # F = np.array(map(distance, indices), dtype=np.float32).reshape(self.wspace)
+            mx = -np.inf
+            for ind in indices:
+                r = distance(ind)
+                F[tuple(ind)] = r
+                mx = max(r, mx)
+            F = 1. / mx
+        return F
 
     def phi_explore(self, indices):
         """:rtype np.ndarray"""
@@ -165,7 +169,8 @@ class dummy_uav(object):
             #     self._path_history.xs.append(float(msg.x))
             #     self._path_history.xs.append(float(msg.y))
             #     self._path_history.xs.append(float(msg.z))
-        # self._explored[int(msg.x), int(msg.y), int(msg.z)] = 1.
+        if 0<=int(msg.x)<self._scale and 0<=int(msg.y)<self._scale and 0<=int(msg.z)<self._scale:
+            self._explored[int(msg.x), int(msg.y), int(msg.z)] = 1.
 
     def callback_co2(self, msg):
         """:type co2: CO_2"""
@@ -266,18 +271,14 @@ class dummy_uav(object):
         #  intention weights, scale 0~1. Phi function must return value in scale 0~1
         weight = {
             "boundary":     1.00,  # better not to loose the robot by letting it out of a boundary
-            "collision":    0.00,  # damage due to collision may be repairable
+            "collision":    0.90,  # damage due to collision may be repairable
             "tunnel":       0.00,
             "valley":       0.00,
-            "explored":     0.00,
+            "explored":     0.80,
         }
         F = np.zeros(self._space)
 
-        dxyz = np.array(map(lambda ind: ind, np.ndindex(self.wspace))) - self._wsize
-        wdxyz = dxyz + old_pos
-        windices = np.array(
-            filter(lambda ind: 0 <= ind[0] < self._scale and 0 <= ind[1] < self._scale and 0 <= ind[2] < self._scale,
-                   wdxyz), dtype='int')
+        windices = self.windices(old_pos)
 
         for k in weight.keys():
             w = weight[k]
@@ -285,7 +286,7 @@ class dummy_uav(object):
             elif k=="boundary": intention = self.phi_boundary(windices)
             elif k=="tunnel": intention = self.phi_tunnel(windices)
             elif k=="valley": intention = self.phi_valley(windices)
-            elif k=="explored": intention = self.phi_valley(windices)
+            elif k=="explored": intention = self.phi_explore(windices)
             F += (w * intention)
 
         F /= F.max()
@@ -335,29 +336,6 @@ class dummy_uav(object):
         rospy.logdebug("{}:{}->{} wsize={}".format(self.tag, old_pos[:], np.array(self._goal.__getstate__()[1:]), self._wsize))
         self._pub_goal_euclid.publish(self._goal)
         self._joint_belief = F
-
-    def fly_straight_goal(self):
-        old_pos = self.position
-        d = np.sqrt(np.sum((old_pos-self._straight_goal)**2))
-        if d < 3:
-            yaw = self._orientation.yaw % 360
-            diff = 5.
-            if (yaw < 45) or (yaw > 360-45):
-                self._straight_goal = old_pos + np.array([diff, 0, 0])
-            elif 45 <= yaw < 90 + 45:
-                self._straight_goal = old_pos + np.array([0, diff, 0])
-            elif 90 + 45 <= yaw < 180 + 45:
-                self._straight_goal = old_pos - np.array([diff, 0, 0])
-            elif 180 + 45 <= yaw < 270 + 45:
-                self._straight_goal = old_pos - np.array([0, diff, 0])
-
-        self._goal.x = self._straight_goal[0]
-        self._goal.y = self._straight_goal[1]
-        self._goal.z = self._straight_goal[2]
-        np.set_printoptions(precision=3)
-        rospy.logdebug("{}:{}->{} wsize={} d={}".format(self.tag, old_pos[:], np.array(self._goal.__getstate__()[1:]),
-                                                        self._wsize, d))
-        self._pub_goal_euclid.publish(self._goal)
 
     def take_off(self):
         """
@@ -424,9 +402,8 @@ class dummy_uav(object):
                 rospy.logerr("{}:{} Out center={}".format(self.tag, self.position, self._goal))
                 self._pub_goal_euclid.publish(self._goal)
             else:
-                # self.fly_local_grad()
-                self._pub_goal_euclid.publish(self._goal)
-                # self.fly_straight_goal()
+                self.fly_local_grad()
+
             # ---------------------publishing own belief for visualization----------------------------------------------
             pub_pose.publish(self._pose)
             msg_viz = Belief()

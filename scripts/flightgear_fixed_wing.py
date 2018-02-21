@@ -83,7 +83,7 @@ class flightgear_fixed_wing(object):
         Arms vehicle and fly_grad to aTargetAltitude (in meters).
         """
         rospy.init_node(self._name, log_level=rospy.DEBUG)
-        rate = rospy.Rate(1)
+        rate = rospy.Rate(10)
         # longitude EW = x axis and latitude NS = y axis
         # send solo to initial location
         print('center = ', self._center_lat, self._center_lon, self._center_alt)
@@ -104,7 +104,7 @@ class flightgear_fixed_wing(object):
                 break
             rospy.logdebug("{} Waiting....\npose read....\n{}".format(self.tag, pose))
             rospy.sleep(5)
-        wait = 15
+        wait = 20
         while wait > 0:
             rospy.logdebug("{} Waiting....{}".format(self.tag, wait))
             wait -= 5

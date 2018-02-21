@@ -130,7 +130,7 @@ class fg_fw_interface(object):
         sensor = sensor_data()
 
         rospy.init_node(self._name)
-        rate = rospy.Rate(50)
+        rate = rospy.Rate(80)
         rospy.Subscriber("/flightgear/{}/next_way_point_gps".format(self._name), data_class=geo_location,
                          callback=self.callback_goal_gps)
         pub_sensor = rospy.Publisher('{}/sensor_data'.format(self._name), data_class=sensor_data, queue_size=1)
@@ -230,25 +230,28 @@ class fg_fw_interface(object):
             max_delta_lat, max_delta_lon = 0.00144194768199/10, 0.00177704227973/10
 
             max_aileron = 0.6
-            max_elevator = 0.2
-            max_throttle = 0.002
+            max_elevator = 0.1
+            max_throttle = 0.003
 
-            kp_alerion = 1./360.
+            kp_alerion = 0.006/360.
             # kp_alerion = 5.0/180.
             kp_throttle = 0.0
-            kp_elevator = 0.1
+            kp_elevator = 0.001
 
-            kd_alerion = 0.01
+            kd_alerion = 0.006
             kd_throttle = 0.0
-            kd_elevator = 0.0
+            kd_elevator = 0.001
 
             throttle = max_throttle
 
             der_alt = dalt - self._previous_error_alt
+
+            output = kp_elevator * abs(dalt) + kd_elevator * der_alt
+            if dalt > 0: elevator = max(-max_elevator,-output)
+            if dalt < 0: elevator = min( max_elevator, output)
+            # print "i={:05} alt={:3.2f} g={:3.2f} dalt={:3.2f} prvE={:3.2f} der={:1.2f} kp*dalt={:1.2f} kd*dalt={:1.2f} elv={:1.2f}".format(
+            #     i, alt1, alt2, dalt, self._previous_error_alt,  der_alt, kp_elevator * dalt, kd_elevator * der_alt, output, elevator)
             self._previous_error_alt = dalt
-            output = kp_elevator * (np.abs(dalt)/50.) + kd_elevator * der_alt
-            if dalt > 0: elevator = max(-max_elevator, -output)
-            if dalt < 0: elevator = min( max_elevator,  output)
 
             err_theta = ((Bearing - heading + 360) % 360)
             if err_theta < 180:
@@ -259,14 +262,8 @@ class fg_fw_interface(object):
                 der_theta = (360. - err_theta) - self._previous_error_deg
                 turn = kp_alerion * (360 - err_theta) + kd_alerion * der_theta
                 aileron = max(-turn, -max_aileron)
-            print "i={:05} yw={:3.2f} g={:3.2f} err={:3.2f} prv={:3.2f} der_theta={:1.2f} kp*err={:1.2f} kd*der={:1.2f} turn={:1.2f} ail={:1.2f}".format(
-                i, heading, Bearing, err_theta, self._previous_error_deg,  der_theta, kp_alerion * err_theta, kd_alerion * der_theta, turn, aileron)
-
-            i += 1
-            if i > 1000:
-                throttle = 0.00001  # fix aileron first
-                elevator = -0.0000001
-                # aileron = 0.05
+            rospy.logdebug("{} i={:05} yw={:3.2f} g={:3.2f} err={:3.2f} prv={:3.2f} der_theta={:1.2f} kp*err={:1.2f} kd*der={:1.2f} turn={:1.2f} ail={:1.2f}".format(
+                self.tag, i, heading, Bearing, err_theta, self._previous_error_deg,  der_theta, kp_alerion * err_theta, kd_alerion * der_theta, turn, aileron))
 
             commands = {"throttle":throttle, "elevator": elevator, "aileron": aileron, "rudder": 0.0}
             sim.FGSend(commands)

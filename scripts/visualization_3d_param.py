@@ -8,7 +8,7 @@ import matplotlib.animation as animation
 import os
 import rospy
 from cloud_map.msg import euclidean_location, Belief, path_history
-
+import datetime as dt
 
 class Visualization(object):
     def __init__(self, name, d):
@@ -24,6 +24,10 @@ class Visualization(object):
         self._path_history = {"xs": [], "ys": [], "zs": []}
         self._goal_euclid = np.zeros(d)
 
+    @property
+    def tag(self):
+        return "Viz{}[{}]:".format(self._name, dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%H:%M:%S"))
+
     def update_all(self, num, unused, ax1self, ax2cax1):
         self.update_self_viz(num=num, unused_iterable=unused, ax=ax1self, cax=ax2cax1)
 
@@ -32,8 +36,8 @@ class Visualization(object):
         freq = 1
         rate = rospy.Rate(freq)
         rospy.logdebug("Launch Visual Node {} with neighbors {}".format(self.name, self.neighbor_names))
-        rospy.Subscriber("/UAV/" + self.name + "/intention_self", Belief, callback=self.callback_intention_self)
-        rospy.Subscriber("/UAV/" + self.name + "/pose", euclidean_location, callback=self.callback_pose)
+        rospy.Subscriber("/UAV/" + self.name + "/intention_self", data_class=Belief, callback=self.callback_intention_self)
+        rospy.Subscriber("/UAV/" + self.name + "/pose", data_class=euclidean_location, callback=self.callback_pose)
         # rospy.Subscriber("/UAV/" + self.name + "/path_history", path_history, callback=self.callback_path_history)
         rospy.Subscriber("/UAV/{}/next_way_point_euclid".format(self.name), data_class=euclidean_location,
                          callback=self.callback_next_euclidean_way_point)
@@ -69,7 +73,7 @@ class Visualization(object):
         :type ax: Axes3D
         :return:
         """
-        if num > 30 and num%3==0:
+        if num > 30 and num%4==0:
             try:
                 plt.savefig("{}/frames{}/{}_{:04d}_joint.png".format(os.path.dirname(__file__), self.name, self.name, num))
             except ValueError as ex:
@@ -95,7 +99,8 @@ class Visualization(object):
         # ind = np.where((t > np.percentile(t, self._cutoff_percentile))
         #                | (t < np.percentile(t, 100.-self._cutoff_percentile))
         #                & (t != t.max()))
-        ind = np.where((t > np.percentile(t, self._cutoff_percentile)))
+        # ind = np.where((t > np.percentile(t, self._cutoff_percentile)))
+        ind = np.where(t > self._cutoff_percentile/100.)
 
         norm = mpl.colors.Normalize(vmin=np.min(self._intention_self), vmax=np.max(self._intention_self), clip=True)
         x, y, z = ind[0], ind[1], ind[2]
@@ -108,8 +113,11 @@ class Visualization(object):
                 ax.text(p3[0], p3[1], p3[2], "{}({:.1f},{:.1f},{:.1f})".format(nm, p3[0], p3[1], p3[2]), fontsize='small')
         p = ax.scatter(x, y, z, c=t[ind], norm=norm, alpha=.6)
         if all(val is not None for val in self._path_history.values()):
-            path_line = ax.plot(xs=self._path_history["xs"], ys=self._path_history["ys"], zs=self._path_history["zs"],
-                                   c='r')
+            try:
+                path_line = ax.plot(xs=self._path_history["xs"], ys=self._path_history["ys"],
+                                    zs=self._path_history["zs"], c='r')
+            except ValueError as ex:
+                rospy.logdebug("{} {}".format(self.tag, ex.message))
         cb = plt.colorbar(p, cax=cax)
         cb.set_label("Joint dist. at A")
         return p
@@ -125,7 +133,6 @@ class Visualization(object):
             self._path_history["xs"].append(pose.x)
             self._path_history["ys"].append(pose.y)
             self._path_history["zs"].append(pose.z)
-
 
     def callback_next_euclidean_way_point(self, goal_euclid):
         """
