@@ -44,20 +44,43 @@ class Simulator:
 
         self._FGSock_recv.bind((self._FG_IP, self._Port_recv))  # bind socket to recv data
 
-    def FGSend(self, commands):
+    def FGSend(self, commands, for_model):
+        """
+        :param commands: control command name and value in a dictionary
+        :param for_model: quad or fixed_wing
+        """
         # Parse command data from topic and generate UDP message
         # command_list = [str(Commands["aileron"]), str(Commands["elevator"]), str(Commands["rudder"]),str(Commands[
         # "throttle"]),str(GLOBAL_HOME_LAT),str(GLOBAL_HOME_LONG),str(GLOBAL_HOME_ALT)]
-        #command_list = [str(commands["aileron"]), str(commands["elevator"]), str(commands["rudder"]),
+        # command_list = [str(commands["aileron"]), str(commands["elevator"]), str(commands["rudder"]),
         #                str(commands["throttle"]),
         #                str(commands["GLOBAL_HOME_LAT"]),
         #                str(commands["GLOBAL_HOME_LONG"]),
         #                str(commands["GLOBAL_HOME_ALT"])
         #                ]
-        command_list = [str(commands["aileron"]), str(commands["elevator"]), str(commands["rudder"]),
-                        str(commands["throttle"])]
+
+        if for_model == 'quad':
+            command_list = [
+                "{}".format(commands["aileron"]),
+                "{}".format(commands["elevator"]),
+                "{}".format(commands["rudder"]),
+                "{}".format(commands["throttle"]),
+                "{}".format(commands["poslat"]),
+                "{}".format(commands["poslon"]),
+                "{}".format(commands["posalt"])
+            ]
+        elif for_model == 'fixed_wing':
+            command_list = [
+                "{}".format(commands["aileron"]),
+                "{}".format(commands["elevator"]),
+                "{}".format(commands["rudder"]),
+                "{}".format(commands["throttle"])
+            ]
+        else:
+            raise Exception("simulator.py Unknown Model!!!")
+
         commands_msg = '\t'.join(command_list) + '\n'
-        # print("{}".format(command_list))
+        # print("{}".format(commands_msg))
         # Send data to FG via UDP
         self._FGSock_send.sendto(commands_msg, (self._FG_IP, self._Port_send))
 

@@ -99,7 +99,6 @@ class fg_fw_interface(object):
         # self.H = PID(kp=kp["alt"], ki=ki["alt"], k_d=kd["alt"], del_t=del_t)  # alt init
         # self.X = PID(kp=kp["x"], ki=ki["x"], k_d=kd["x"], del_t=del_t)  # roll pid init  # course init
 
-
     @property
     def tag(self):
         return "{}[{}]".format(self._name, dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%H:%M:%S"))
@@ -122,7 +121,7 @@ class fg_fw_interface(object):
             UDP_IP = s.getsockname()[0]
             s.close()
         except socket.error:
-            rospy.logdebug("{}:Network connection unavailable...".format(self._name,self.tag))
+            rospy.logdebug("{}:Network connection unavailable...".format(self.tag))
             exit(-1)
 
         sock_params = {'IP': UDP_IP, "port_send": self._port_send, "port_recv": self._port_recv}
@@ -172,10 +171,10 @@ class fg_fw_interface(object):
 
             self._sensor = sensor
 
-            lat1 = float(self._sensor.Pos_n)
-            lon1 = float(self._sensor.Pos_e)
-            alt1 = float(self._sensor.Pos_d)
-            heading = self._sensor.yaw_deg
+            lat1 = float(sensor.Pos_n)
+            lon1 = float(sensor.Pos_e)
+            alt1 = float(sensor.Pos_d)
+            heading = sensor.yaw_deg
 
             if np.isclose(self._goal.latitude, 36.1340362495, atol=1e-8) and np.isclose(self._goal.longitude, 97.0762336919, atol=1e-8):
                 rospy.logerr("{} pid: goal {}".format(self._name, self._goal))
@@ -231,7 +230,7 @@ class fg_fw_interface(object):
 
             max_aileron = 0.6
             max_elevator = 0.1
-            max_throttle = 0.003
+            max_throttle = 0.005
 
             kp_alerion = 0.006/360.
             # kp_alerion = 5.0/180.
@@ -266,6 +265,6 @@ class fg_fw_interface(object):
                 self.tag, i, heading, Bearing, err_theta, self._previous_error_deg,  der_theta, kp_alerion * err_theta, kd_alerion * der_theta, turn, aileron))
 
             commands = {"throttle":throttle, "elevator": elevator, "aileron": aileron, "rudder": 0.0}
-            sim.FGSend(commands)
+            sim.FGSend(commands, for_model="fixed_wing")
             pub_sensor.publish(sensor)
             rate.sleep()

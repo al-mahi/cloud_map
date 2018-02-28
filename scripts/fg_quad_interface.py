@@ -1,13 +1,23 @@
 #!/usr/bin/env python
 
-from __future__ import print_function
 from simulator import Simulator
 import rospy
 import socket
 from math import *
-from cloud_map.msg import sensor_data, geo_location, euclidean_location
+from cloud_map.msg import sensor_data, geo_location
+from std_msgs.msg import Bool
 # from geometry_msgs.msg import Pose, Point, Quaternion, Twist, Vector3
 import numpy as np
+import datetime as dt
+
+
+class PID:
+    def __init__(self, k_p, k_i, k_d, del_t):
+        self.k_p = k_p
+        self.k_i = k_i
+        self.k_d = k_d
+
+        self.del_t = del_t
 
 
 class fg_quad_interface(object):
@@ -17,34 +27,62 @@ class fg_quad_interface(object):
         self._port_recv = port_recv
         self._goal = geo_location()
         self._sensor = sensor_data()
+        self._velocity = 1.
+        self._is_ready = False
+        self._reached_goal = False
+        self._rospy_rate = 1
 
     def callback_goal_gps(self, goal):
+        """:type goal: geo_location"""
         self._goal = goal
+        # if self._reached_goal and goal:
+        #     # print "reached goal new goal ", goal.__getstate__()[1:]
+        #     self._goal = goal
+        #     self._reached_goal = False
+
+    def callback_is_robot_ready(self, msg):
+        """:type msg: Bool"""
+        self._is_ready = Bool(msg.data)
 
     def callback_fg_sensor(self, sensor):
+        """:type sensor: sensor_data"""
         self._sensor = sensor
 
+    @property
+    def tag(self):
+        return "{}[{}]".format(self.name, dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%H:%M:%S"))
+
     def simple_goto(self):
+        """
+        Continuously Listens to goal_gps topic and set controller to guide aircraft towards the goal
+        """
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.connect(("google.com", 80))
             UDP_IP = s.getsockname()[0]
             s.close()
         except socket.error:
-            rospy.logdebug("{}[{}]:Network connection unavailable...".format(self._name,self.time_tag))
+            rospy.logdebug("{}:Network connection unavailable...".format(self.tag))
             exit(-1)
-
         sock_params = {'IP': UDP_IP, "port_send": self._port_send, "port_recv": self._port_recv}
         sim = Simulator(sock_params)
         sensor = sensor_data()
 
         rospy.init_node(self._name)
+        rate = rospy.Rate(self._rospy_rate)
         rospy.Subscriber("/flightgear/{}/next_way_point_gps".format(self._name), data_class=geo_location,
                          callback=self.callback_goal_gps)
+        vendor = rospy.get_param('/{}s_vendor'.format(self._name))
+        rospy.Subscriber("/{}/{}/ready".format(vendor, self._name), Bool, callback=self.callback_is_robot_ready)
 
         pub_sensor = rospy.Publisher('{}/sensor_data'.format(self._name), data_class=sensor_data, queue_size=1)
 
+        distance = 0.0
+
+        i=0
+
         while not rospy.is_shutdown():
+            i = (i+1)%30
             fg_data = sim.FGRecv()
             sensor.Pos_n = fg_data[0]
             sensor.Pos_e = fg_data[1]
@@ -78,80 +116,84 @@ class fg_quad_interface(object):
             sensor.Dewpoint_degc = fg_data[41]
             sensor.wind_speed_kt = fg_data[42]
             sensor.wind_heading_deg = fg_data[43]
-
-            lat1 = self._sensor.Pos_n
-            lon1 = self._sensor.Pos_e
-            alt1 = self._sensor.Pos_d
-            heading = self._sensor.yaw_deg
+            poslat = float(sensor.Pos_n)
+            poslon = float(sensor.Pos_e)
+            posalt = float(sensor.Pos_d)
+            lat1 = float(sensor.Pos_n)
+            lon1 = float(sensor.Pos_e)
+            alt1 = float(sensor.Pos_d)
+            heading = sensor.yaw_deg
 
             lat2 = self._goal.latitude
             lon2 = self._goal.longitude
             alt2 = self._goal.altitude
 
-            ### Uclidian # GPS -> Distance based
-            x1 = alt1 * cos(lat1) * sin(lon1)
-            y1 = alt1 * sin(lat1)
-            z1 = alt1 * cos(lat1) * cos(lon1)
-
-            x2 = alt2 * cos(lat2) * sin(lon2)
-            y2 = alt2 * sin(lat2)
-            z2 = alt2 * cos(lat2) * cos(lon2)
-
-            dist = sqrt((x2-x1)**2 + (y2-y1)**2 + (z2-z1)**2)
-
             dlat = lat2 - lat1
             dlon = lon2 - lon1
             dalt = alt2 - alt1
 
-            Aaltitude = alt1
-            Oppsite  = alt2
+            distlat = dlat * 110961.03
+            distlon = dlon * 90037.25
+            distalt = dalt
+            distance = sqrt(distlat**2 + distlon**2 + distalt**2)
+            # if self._is_ready:
+            #     print self._name, distance
+            # if distance < 10.:
+            #     print "reached goal", self._name, distance
+            #     self._reached_goal = True
 
-            lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
+            # if distalt > 0:
+            #     resalt = posalt + self._velocity
+            # if distalt < 0:
+            #     resalt = posalt - self._velocity
+            # if distlat > 0:
+            #     reslat = poslat + self._velocity/110961.03
+            # if distlat < 0:
+            #     reslat = poslat - self._velocity/110961.03
+            # if distlon > 0:
+            #     reslon = poslon + self._velocity/90037.25
+            # if distlon < 0:
+            #     reslon = poslon - self._velocity/90037.25
 
-            dlon = lon2 - lon1
-            dlat = lat2 - lat1
-            a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
-            # c = 2 * atan2(sqrt(a), sqrt(1-a))
-            c = 2. * asin(sqrt(a))
-            Base = 6371 * c + np.random.rand()*0.1
+            dist_linspace_num = int(round(distance))
+            # dist_linspace_num = self._rospy_rate
+            # if self._is_ready: print "disnum ", dist_linspace_num, distance
+            # if distance > 15. and self._is_ready:
+            #     linspace_lat = np.linspace(lat1, lat2, dist_linspace_num)
+            #     linspace_lon = np.linspace(lon1, lon2, dist_linspace_num)
+            #     linspace_alt = np.linspace(alt1, alt2, dist_linspace_num)
+            #     reslat = linspace_lat[1]
+            #     reslon = linspace_lon[1]
+            #     resalt = linspace_alt[1]
+            # else:
+            #     reslat = lat2
+            #     reslon = lon2
+            #     resalt = alt2
+            #     self._reached_goal = True
 
-            Bearing =atan2(cos(lat1)*sin(lat2)-sin(lat1)*cos(lat2)*cos(lon2-lon1), sin(lon2-lon1)*cos(lat2))
+            reslat = lat2
+            reslon = lon2
+            resalt = alt2
 
-            Bearing = degrees(Bearing)
-            Bearing = (Bearing + 360) % 360
-            Bearing = (90 - Bearing + 360) % 360
+            if not self._is_ready or distance > 40:
+                # print "quad not ready"
+                reslat = lat1
+                reslon = lon1
+                resalt = alt1
 
-            Base2 = Base * 1000.
-            distance = (Base * 2 + Oppsite * 2) / 2
-            Caltitude = Oppsite - Aaltitude
-
-            a = Oppsite/Base
-            b = atan(a)
-            c = degrees(b)
-
-            distance = distance / 1000.
-            throttle_low = 0.005
-            if dalt > 0:
-                elevator = -0.008
-                throttle = throttle_low + 0.1*fabs(elevator)
-            if dalt < 0:
-                elevator = 0.008
-                throttle = throttle_low + 0.1*fabs(elevator)
-            if dalt == 0:
-                elevator = 0
-            # PID Controller (2 Jung)
-            # heading = 45
-            if (Bearing - heading + 360) % 360 > 180:
-                aileron = -0.8 * (float(((Bearing - heading + 360) % 360)-180.)/180.)
-                throttle = throttle_low + 0.001*fabs(aileron)
-            if (Bearing - heading + 360) % 360 < 180:
-                aileron = 0.8 * (float(((Bearing - heading + 360) % 360)-180.)/180.)
-                throttle = throttle_low + 0.001*fabs(aileron)
-
-            # commands = {"throttle":throttle, "elevator": elevator, "aileron": aileron, "rudder": 0.0}
-            # sim.FGSend(commands)
-
+            commands = {
+                "throttle": float(0.00),
+                "elevator": float(0.0),
+                "aileron":  float(0.00),
+                "rudder":   float(0.00),
+                "poslat":   float(reslat),  # float(reslat),
+                "poslon":   float(reslon),  # float(reslon),
+                "posalt":   float(resalt)  # float(resalt)
+            }
+            # if self._is_ready:
+            # if i%self._rospy_rate == 0:
+            # print("{}{:02d} num={} lat=cur={} nxt={} g={} lon {} {} {} alt {} {} {} d={}".format(self._name, i, dist_linspace_num, poslat, reslat, lat2, poslon, reslon, lon2, posalt, resalt, alt2, distance))
+            if distance < 40.:
+                sim.FGSend(commands, for_model="quad")
             pub_sensor.publish(sensor)
-
-            rospy.sleep(1)
-
+            rate.sleep()

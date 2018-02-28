@@ -3,7 +3,7 @@
     <arg name="dim" value="3"/>
     <!--scale of the space-->
     <arg name="scale" value="50"/>
-    <arg name="As_neighbors" value="B"/>
+    <arg name="As_neighbors" value=""/>
     <arg name="Bs_neighbors" value="A_C"/>
     <arg name="Cs_neighbors" value="B"/>
     <!--<arg name="Cs_neighbors" value="A"/>-->
@@ -42,19 +42,19 @@
 
     <group ns="Visual">
         <!--based on the dimension appropriate visualization will be generated-->
-        <node name="A" pkg="cloud_map" type="visualize_uavA.py" respawn="false" output="screen">
-            <param name="name" value="A"/>
-            <param name="neighbors" value="$(arg As_neighbors)"/>
-        </node>
+        <!--<node name="A" pkg="cloud_map" type="visualize_uavA.py" respawn="false" output="screen">-->
+            <!--<param name="name" value="A"/>-->
+            <!--<param name="neighbors" value="$(arg As_neighbors)"/>-->
+        <!--</node>-->
         <node name="B" pkg="cloud_map" type="visualize_uavB.py" respawn="false" output="screen">
             <param name="name" value="B"/>
             <param name="neighbors" value="$(arg Bs_neighbors)"/>
         </node>
-        <node name="C" pkg="cloud_map" type="visualize_uavC.py" respawn="false" output="screen">
-            <param name="name" value="C"/>
-            <!--separate neighbour names by _ ; If A had B,C neighbour value="B_C"-->
-            <param name="neighbors" value="$(arg Cs_neighbors)"/>
-        </node>
+        <!--<node name="C" pkg="cloud_map" type="visualize_uavC.py" respawn="false" output="screen">-->
+            <!--<param name="name" value="C"/>-->
+            <!--&lt;!&ndash;separate neighbour names by _ ; If A had B,C neighbour value="B_C"&ndash;&gt;-->
+            <!--<param name="neighbors" value="$(arg Cs_neighbors)"/>-->
+        <!--</node>-->
         <!--<node name="T" pkg="cloud_map" type="visualize_Temp.py" respawn="false" output="screen"></node>-->
         <!--<node name="H" pkg="cloud_map" type="visualize_Humidity.py" respawn="false" output="screen"></node>-->
     </group>

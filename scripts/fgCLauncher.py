@@ -44,8 +44,9 @@ if __name__ == '__main__':
     server_ip = s.getsockname()[0]
     port = s.getsockname()[1]
     s.close()
-    start_at = euclid_to_geo(NS=28., EW=32, UD=30)
+    start_at = euclid_to_geo(NS=15., EW=25, UD=11)
     FGthread(
-        server_id = 1, instance=instance_num, controller_hostIP=server_ip, freq_in=100, freq_out=100,
-        vehicle=vehicle, lat=start_at.latitude, lon=start_at.longitude, alt=start_at.altitude,
-        iheading=45, ivel=60, ithrottle=0.0001)  # 0.1 -> throttle
+        server_id = 1, instance=instance_num, controller_hostIP=server_ip,
+        control_input_config='ControlInputMageQuadTeleport', freq_in=1, freq_out=1, vehicle=vehicle,
+        lat=start_at.latitude, lon=start_at.longitude, alt=start_at.altitude, iheading=45, ivel=60, ithrottle=0.0001)
+

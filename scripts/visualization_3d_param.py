@@ -26,7 +26,7 @@ class Visualization(object):
 
     @property
     def tag(self):
-        return "Viz{}[{}]:".format(self._name, dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%H:%M:%S"))
+        return "Viz{}[{}]:".format(self.name, dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%H:%M:%S"))
 
     def update_all(self, num, unused, ax1self, ax2cax1):
         self.update_self_viz(num=num, unused_iterable=unused, ax=ax1self, cax=ax2cax1)
@@ -133,6 +133,9 @@ class Visualization(object):
             self._path_history["xs"].append(pose.x)
             self._path_history["ys"].append(pose.y)
             self._path_history["zs"].append(pose.z)
+            # self._path_history["xs"] = self._path_history["xs"][-200:]
+            # self._path_history["ys"] = self._path_history["ys"][-200:]
+            # self._path_history["zs"] = self._path_history["zs"][-200:]
 
     def callback_next_euclidean_way_point(self, goal_euclid):
         """

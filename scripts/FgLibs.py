@@ -4,7 +4,7 @@ import os, sys
 import socket
 import rospy
 
-mpout_IP = "mpserver03.flightgear.org"  # FG Multiplayer Server Address
+mpout_IP = "mpserver01.flightgear.org"  # FG Multiplayer Server Address
 mpout_port = 5000  # Port over which instance communicates with FG multiplayer server
 
 
@@ -38,7 +38,7 @@ def getid(server_no, instance):
 
 
 # Launch FG with desired parameters
-def FGthread(server_id, instance, controller_hostIP, freq_in=100, freq_out=100, vehicle='ufo', lat=37.67, lon=-122.35,
+def FGthread(server_id, instance, controller_hostIP, control_input_config, freq_in=100, freq_out=100, vehicle='ufo', lat=37.67, lon=-122.35,
              alt=2000, iheading=45, ivel=60, ithrottle=0.001):
     # Parse the required information to call FG instance
     Instance_info = getid(server_id, instance)
@@ -70,7 +70,7 @@ def FGthread(server_id, instance, controller_hostIP, freq_in=100, freq_out=100, 
         sensor_port) + ',udp,ControlOutputMage' + ' ' + '--generic=socket,out,' + str(freq_out) + ',localhost,' + str(
         mavlink_port) + ',udp,MAVOutput'
     sock_in = '--generic=socket,in,' + str(freq_in) + ',' + str(mpin_IP) + ',' + str(
-        command_port) + ',udp,ControlInputMage'
+        command_port) + ',udp,' + control_input_config
     SOCK = sock_out + ' ' + sock_in
 
     multiplay_out = '--multiplay=out,' + str(freq_out) + ',' + mpout_IP + ',' + str(mpout_port)

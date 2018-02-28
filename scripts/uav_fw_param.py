@@ -35,7 +35,7 @@ def scale_dist(F, low=0., high=1., as_prob=False):
 
 
 class dummy_uav(object):
-    def __init__(self, name, dim, scale, wsize=3):
+    def __init__(self, name, dim, scale, wsize=5):
         self._name = name
         self._scale = scale
         self._dim = dim
@@ -68,8 +68,9 @@ class dummy_uav(object):
         :return: indices window which is local space around current position scaled by window size wsize
         :rtype: np.ndarray
         """
-        dxyz = np.array(map(lambda ind: ind, np.ndindex(self.wspace))) - self._wsize
-        window = dxyz + pos
+        # converting to numpy array is cruical ndindex can only be used once whereas numpy array can used several times
+        dxyz = np.array(map(lambda ind: np.array(ind), np.ndindex(self.wspace))) - self._wsize
+        window = dxyz + np.round(pos)
         window = np.array(filter(lambda ind: 0 <= ind[0] < self._scale and
                                          0 <= ind[1] < self._scale and
                                          0 <= ind[2] < self._scale, window), dtype='int')
@@ -77,30 +78,46 @@ class dummy_uav(object):
 
     def phi_avoid_collision(self, indices):
         """:rtype np.ndarray"""
-        res = np.zeros(shape=self._space)
         fgx, fgy, fgz = self._pose.x, self._pose.y, self._pose.z
+        F = np.zeros(self._space)
         for nbnm in self.neighbour_names:
-            F = np.zeros(self._space)
             nb = self._param_q[nbnm]
             vel = self._vel_euclid
             f1x, f1y, f1z = nb.pose_euclid.x, nb.pose_euclid.y, nb.pose_euclid.z
             f2x = (fgx + (vel.x / 10.) * (f1x - fgx))
             f2y = (fgy + (vel.y / 10.) * (f1y - fgy))
             f2z = (fgz + (vel.z / 02.) * (f1z - fgz))
+            # all phi should be normalized wrt the global possible maximum for the defined space. max of this distance
+            # if mistakenly normalized by local max then the affect is even if the actual cell value is low in that
+            # space it will be treated wrt to other local cell and the max int local will be weighted
 
             def distance(arr):
                 d1 = np.sqrt((arr[0] - f1x) ** 2. + (arr[1] - f1y) ** 2. + (arr[2] - f1z) ** 2.)
                 d2 = np.sqrt((arr[0] - f2x) ** 2. + (arr[1] - f2y) ** 2. + (arr[2] - f2z) ** 2.)
                 return d1 + d2
-
+            # avoid global calculation of intentions because it is slow and decision are made locally
             # indices = np.ndindex(self._space)
             # F = np.array(map(distance, indices), dtype=np.float32).reshape(self.wspace)
-            mx = -np.inf
+            c = self._scale-1
+            gmax = max(distance([0, 0, 0]),
+                       distance([0, 0, c]),
+                       distance([0, c, 0]),
+                       distance([0, c, c]),
+                       distance([c, 0, 0]),
+                       distance([c, 0, c]),
+                       distance([c, c, 0]),
+                       distance([c, c, c]))
             for ind in indices:
-                r = distance(ind)
-                F[tuple(ind)] = r
-                mx = max(r, mx)
-            F = 1. / mx
+                #  larger distance is interesting. avoidance is a repulsive intention
+                d1 = np.sqrt((ind[0] - f1x) ** 2. + (ind[1] - f1y) ** 2. + (ind[2] - f1z) ** 2.)
+                if d1 > 15:
+                    F[tuple(ind)] += (1./len(self.neighbour_names))
+                else:
+                    F[tuple(ind)] += (distance(ind)/(len(self.neighbour_names) * gmax))
+        for ind in indices:
+            #  larger distance is interesting. avoidance is a repulsive intention
+            F[tuple(ind)] = 1. - F[tuple(ind)]
+
         return F
 
     def phi_explore(self, indices):
@@ -110,17 +127,17 @@ class dummy_uav(object):
     def phi_boundary(self, indices):
         """:rtype np.ndarray"""
         F = np.zeros(self._space)
-        mx = -np.inf
+        th = 8
+        r = self._scale/2
+        center = r * np.ones(3)
         for ind in indices:
-            th = 10
-            r = (self._scale-1)/2
-            center = np.array([r, r, r])
             d = max(np.abs(ind - center))
-            if d + th > r:
-                F[tuple(ind)] = d
-                mx = max(mx, d)
+            if d + th > r: F[tuple(ind)] = d
 
-        return F / mx
+        # all phi should be normalized wrt the global possible maximum for the defined space. max of this distance
+        # if mistakenly normalized by local max then the affect is even if the actual cell value is low in that
+        # space it will be treated wrt to other local cell and the max int local will be weighted
+        return F / r
 
     def phi_tunnel(self, indices):
         """:rtype np.ndarray"""
@@ -136,6 +153,19 @@ class dummy_uav(object):
             F[tuple(ind)] = d
             mx = max(mx, d)
         return F / mx
+
+    def calc_param_send(self, nb):
+        msg_send = belief_param()
+        msg_send.header.frame_id = nb
+        msg_send.num_of_neighbor = len(self.neighbour_names) - 1
+        for nn in self.neighbour_names:
+            if nn != nb:
+                msg_send.neighbors+=nn
+                msg_send.pos_xs.append(self._param_q[nn].pose_euclid.x)
+                msg_send.pos_ys.append(self._param_q[nn].pose_euclid.y)
+                msg_send.pos_zs.append(self._param_q[nn].pose_euclid.z)
+                msg_send.co2s.append(self._param_q[nn].co2.density)
+        return msg_send
 
     @property
     def name(self):
@@ -165,19 +195,15 @@ class dummy_uav(object):
         self._param_q[msg.header.frame_id].explored.append(msg.__getstate__()[1:])
         if msg.header.frame_id == self.name:
             self._pose = msg
-            # if self._solo_is_ready:
-            #     self._path_history.xs.append(float(msg.x))
-            #     self._path_history.xs.append(float(msg.y))
-            #     self._path_history.xs.append(float(msg.z))
         if 0<=int(msg.x)<self._scale and 0<=int(msg.y)<self._scale and 0<=int(msg.z)<self._scale:
             self._explored[int(msg.x), int(msg.y), int(msg.z)] = 1.
 
     def callback_co2(self, msg):
-        """:type co2: CO_2"""
+        """:type msg: CO_2"""
         self._param_q[msg.header.frame_id].co2 = msg
 
     def callback_orientation_euler(self, msg):
-        """:type orientation_euler: orientation_euler"""
+        """:type msg: orientation_euler"""
         self._param_q[msg.header.frame_id].orientation_euler = msg
         if msg.header.frame_id == self.name:
             self._orientation = msg
@@ -238,12 +264,11 @@ class dummy_uav(object):
         grad = np.array([dFdx, dFdy, dFdz])
         k = np.linalg.norm(grad)
         if np.isclose(k, 0., atol=1.e-6):
-            # print("optimum!!!")
-            # grad = np.random.uniform(-1, 1, self._dim)
-            # k = np.sum(np.linalg.norm(grad))
-            return
-        dx = (grad / k)
-        k = k * (self._scale/3.)
+            print("optimum!!!")
+            grad = np.random.uniform(-1, 1, self._dim)
+            k = np.sum(np.abs(grad))
+        dx = (grad / k)  # + np.random.uniform(low=-1, high=1, size=dim)/100000.
+
         old_pos = self.position
 
         new_pos = old_pos - k * dx
@@ -271,16 +296,16 @@ class dummy_uav(object):
         #  intention weights, scale 0~1. Phi function must return value in scale 0~1
         weight = {
             "boundary":     1.00,  # better not to loose the robot by letting it out of a boundary
-            "collision":    0.90,  # damage due to collision may be repairable
+            "collision":    1.00,  # damage due to collision may be repairable
             "tunnel":       0.00,
             "valley":       0.00,
-            "explored":     0.80,
+            "explored":     0.50,
         }
         F = np.zeros(self._space)
 
-        windices = self.windices(old_pos)
-
         for k in weight.keys():
+            # careful because win
+            windices = self.windices(old_pos)
             w = weight[k]
             if k=="collision": intention = self.phi_avoid_collision(windices)
             elif k=="boundary": intention = self.phi_boundary(windices)
@@ -291,17 +316,17 @@ class dummy_uav(object):
 
         F /= F.max()
 
-        Rz = lambda theta: np.array([
-            [np.cos(theta), -np.sin(theta), 0.],
-            [np.sin(theta),  np.cos(theta), 0.],
-            [0,                         0.,  1.]
-        ])
-
-        Ry = lambda theta: np.array([
-            [ np.cos(theta), 0., -np.sin(theta)],
-            [            0., 1.,             0.],
-            [-np.sin(theta), 0.,  np.cos(theta)]
-        ])
+        # Rz = lambda theta: np.array([
+        #     [np.cos(theta), -np.sin(theta), 0.],
+        #     [np.sin(theta),  np.cos(theta), 0.],
+        #     [0,                         0.,  1.]
+        # ])
+        #
+        # Ry = lambda theta: np.array([
+        #     [ np.cos(theta), 0., -np.sin(theta)],
+        #     [            0., 1.,             0.],
+        #     [-np.sin(theta), 0.,  np.cos(theta)]
+        # ])
 
         L = self._wsize
         Oa = np.zeros(3)
@@ -343,6 +368,7 @@ class dummy_uav(object):
         """
         rospy.init_node(self._name, log_level=rospy.DEBUG)
         rate = rospy.Rate(10)
+        q_size = 10
 
         vendor = rospy.get_param('/{}s_vendor'.format(self._name))
         rospy.Subscriber("/{}/{}/ready".format(vendor, self._name), Bool, callback=self.callback_is_robot_ready)
@@ -389,12 +415,13 @@ class dummy_uav(object):
                 rospy.Subscriber(name='/{}/{}/vel_euclid'.format(vendor, from_uav), callback=self.callback_vel_euclid,
                                  data_class=twist_euclid)
 
+                to_uav = from_uav
+        pub_belief = rospy.Publisher("{}/belief_params".format(self.name), data_class=belief_param, queue_size=q_size)
+
         self._pose = euclidean_location()
-        q_size = 10
         # fix3d
         pub_pose = rospy.Publisher(self.name + '/pose', data_class=euclidean_location, queue_size=q_size)
         pub_self = rospy.Publisher(self.name + '/intention_self', numpy_msg(Belief), queue_size=q_size)
-        pub_path_history = rospy.Publisher(self.name + '/path_history', numpy_msg(path_history), queue_size=q_size)
 
         while not rospy.is_shutdown():
             if any(self.position < 0.) or any(self.position >= self._scale - 1.):
@@ -404,6 +431,10 @@ class dummy_uav(object):
             else:
                 self.fly_local_grad()
 
+            for nb in self.neighbour_names:
+                msg_send = self.calc_param_send(nb)
+                pub_belief.publish(msg_send)
+
             # ---------------------publishing own belief for visualization----------------------------------------------
             pub_pose.publish(self._pose)
             msg_viz = Belief()
@@ -411,7 +442,6 @@ class dummy_uav(object):
             msg_viz.data = self._joint_belief.ravel()
             msg_viz.header.stamp = rospy.Time.now()
             pub_self.publish(msg_viz)
-            # pub_path_history.publish(self._path_history)
             rate.sleep()
 
 

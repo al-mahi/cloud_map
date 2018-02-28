@@ -6,6 +6,8 @@ import datetime as dt
 import rospy
 import socket
 from cloud_map.msg import *
+import numpy as np
+
 
 
 class flightgear_fixed_wing(object):
@@ -28,9 +30,9 @@ class flightgear_fixed_wing(object):
         # cowboy cricket ground bowling end 36.133642, -97.076528
         self._origin_lat = 36.1333333
         self._origin_lon = -97.0771
-        self._origin_alt = 5.  # meter
-        self._meters_per_alt = 4.
-        self._meters_per_disposition = 4.
+        self._origin_alt = 10.  # meter
+        self._meters_per_alt = 10.
+        self._meters_per_disposition = 10.
         self._meters_per_lat = 110961.03  # meters per degree of latitude for use near Stillwater
         self._meters_per_lon = 90037.25  # meters per degree of longitude
         self._tol_meter = .05  # drone to be considered reached a goal if it is withing tol_meter within the goal
@@ -84,6 +86,8 @@ class flightgear_fixed_wing(object):
         """
         rospy.init_node(self._name, log_level=rospy.DEBUG)
         rate = rospy.Rate(10)
+        rospy.Subscriber("/fg_interface/{}/sensor_data".format(self._name), data_class=sensor_data,
+                         callback=self.callback_fg_sensor)
         # longitude EW = x axis and latitude NS = y axis
         # send solo to initial location
         print('center = ', self._center_lat, self._center_lon, self._center_alt)
@@ -95,16 +99,16 @@ class flightgear_fixed_wing(object):
             self._goal_gps.altitude, self._tol_lon, self._tol_lat, self._tol_alt)
         )
         self._pub_next_goal_gps = rospy.Publisher(self._name + '/next_way_point_gps', data_class=geo_location, queue_size=10)
-        self._pub_next_goal_gps.publish(self._goal_gps)
-        rospy.Subscriber("/fg_interface/{}/sensor_data".format(self._name), data_class=sensor_data,
-                         callback=self.callback_fg_sensor)
+
         while True:
             pose = self.pose_in_euclid()
             if (0. < pose.x < self._scale) and (0 < pose.y < self._scale):
                 break
+            self._goal_gps = self._pose_gps
+            self._pub_next_goal_gps.publish(self._pose_gps)
             rospy.logdebug("{} Waiting....\npose read....\n{}".format(self.tag, pose))
             rospy.sleep(5)
-        wait = 20
+        wait = np.random.randint(low=5, high=15)
         while wait > 0:
             rospy.logdebug("{} Waiting....{}".format(self.tag, wait))
             wait -= 5

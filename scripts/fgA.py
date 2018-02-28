@@ -21,4 +21,4 @@ if __name__ == '__main__':
     fg_uav = flightgear_quad_static(name=name,instance=instance_num,server_id=1, server_ip=server_ip,
                                     port_send=port_send + instance_num, port_recv=port_recv+instance_num, scale=scale,
                                  dim=dim)
-    fg_uav.arm_and_takeoff(start_at_euclid=[10., 7., 14.])
+    fg_uav.arm_and_takeoff(start_at_euclid=[9., 23., 10.])

@@ -4,10 +4,9 @@ from __future__ import print_function
 from std_msgs.msg import Bool
 import datetime as dt
 import rospy
-# for flightgear
-from simulator import Simulator
 import socket
 from cloud_map.msg import *
+import numpy as np
 
 
 class flightgear_quad_static(object):
@@ -30,9 +29,9 @@ class flightgear_quad_static(object):
         # cowboy cricket ground bowling end 36.133642, -97.076528
         self._origin_lat = 36.1333333
         self._origin_lon = -97.0771
-        self._origin_alt = 5.  # meter
-        self._meters_per_alt = 4.
-        self._meters_per_disposition = 4.
+        self._origin_alt = 10.  # meter
+        self._meters_per_alt = 10.
+        self._meters_per_disposition = 10.
         self._meters_per_lat = 110961.03  # meters per degree of latitude for use near Stillwater
         self._meters_per_lon = 90037.25  # meters per degree of longitude
         self._tol_meter = .05  # drone to be considered reached a goal if it is withing tol_meter within the goal
@@ -43,13 +42,30 @@ class flightgear_quad_static(object):
         self._max_lon = self._origin_lon + (self._meters_per_disposition * self._scale) / self._meters_per_lon
         self._max_lat = self._origin_lat + (self._meters_per_disposition * self._scale) / self._meters_per_lat
         self._max_alt = self._origin_alt + (self._meters_per_disposition * self._scale)
+        self._center_lon = (self._origin_lon + self._max_lon) / 2.
+        self._center_lat = (self._origin_lat + self._max_lat) / 2.
+        self._center_alt = (self._origin_alt + self._max_alt) / 2.
 
         self._pose_gps = geo_location()
+        self._orientation = orientation_euler()
+        self._temperature = temperature()
+        self._humidity = humidity()
+        self._co2 = CO_2()
+        self._velocity_ms = twist_ms()
 
         self._pub_pose_gps = None
         self._pub_pose_euclid = None
         self._pub_distance_to_goal = None
+        self._pub_next_goal_gps = None
+        self._pub_temperature = None
+        self._pub_humidity = None
+        self._pub_orientation_euler = None
+        self._pub_co2 = None
+        self._pub_vel_ms = None
+        self._pub_vel_euclid = None
         self._is_ready = False
+        self._pub_ready = None
+        self._rospy_rate = 1
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.connect(("google.com", 80))
@@ -58,11 +74,11 @@ class flightgear_quad_static(object):
         except socket.error:
             rospy.logdebug("{}Network connection unavailable...".format(self.tag))
             exit(-1)
-        self._sim = Simulator({'IP': UDP_IP, "port_send": self._port_send, "port_recv": self._port_recv})
+        self._udp_ip = UDP_IP
 
     @property
     def tag(self):
-        return "fg_{}[{}]:".format(self._name, dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%H:%M:%S"))
+        return "fgqd_{}[{}]:".format(self._name, dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%H:%M:%S"))
 
     def arm_and_takeoff(self, start_at_euclid=None):
         """
@@ -70,100 +86,59 @@ class flightgear_quad_static(object):
         Arms vehicle and fly_grad to aTargetAltitude (in meters).
         """
         rospy.init_node(self._name, log_level=rospy.DEBUG)
-        rate = rospy.Rate(1)
-
-        rospy.logdebug("{} init node max (lon, lat, alt)=({},{},{})".format(
-            self.tag, self._max_lon, self._max_lat, self._max_alt))
-
+        rate = rospy.Rate(self._rospy_rate)
         # longitude EW = x axis and latitude NS = y axis
         # send solo to initial location
+        print('center = ', self._center_lat, self._center_lon, self._center_alt)
+        self._goal_euclid = euclidean_location(header=self._name, x=start_at_euclid[0], y=start_at_euclid[1], z=start_at_euclid[2])
+        self._goal_gps = self.euclid_to_geo(NS=self._goal_euclid.y, EW=self._goal_euclid.x, UD=self._goal_euclid.z)
 
-        # FGthread(
-        #     server_id = self._server_id, instance=self._instance, controller_hostIP=self._server_ip, freq_in=100, freq_out=100,
-        #     vehicle='quad', lat=self._origin_lat, lon=self._origin_lon, alt=self._origin_alt,
-        #     iheading=45, ivel=60, ithrottle=0)  # 0.1 -> throttle
-
-        pub_ready = rospy.Publisher('{}/ready'.format(self._name), data_class=Bool, queue_size=1)
-
-        self._goal_euclid = euclidean_location()
-        self._goal_gps = self.euclid_to_geo(NS=self._goal_euclid.y, EW=self._goal_euclid.x,
-                                        UD=self._goal_euclid.z)
-
-        # rospy.logdebug("{}Sending to initial goal (x,y,z)=({}) (lon, lat, alt)=({},{},{}) tol=({},{},{})".format(
-        #     self.tag, start_at_euclid, self._goal_gps.position.y, self._goal_gps.position.x,
-        #     self._goal_gps.position.z, self._tol_lon, self._tol_lat, self._tol_alt)
-        # )
-
+        rospy.logdebug("{}Sending to initial goal (x,y,z)=({}) (lon, lat, alt)=({},{},{}) tol=({},{},{})".format(
+            self.tag, start_at_euclid, self._goal_gps.longitude, self._goal_gps.latitude,
+            self._goal_gps.altitude, self._tol_lon, self._tol_lat, self._tol_alt)
+        )
+        self._pub_next_goal_gps = rospy.Publisher(self._name + '/next_way_point_gps', data_class=geo_location, queue_size=10)
+        self._pub_next_goal_gps.publish(self._goal_gps)
         rospy.Subscriber("/fg_interface/{}/sensor_data".format(self._name), data_class=sensor_data,
                          callback=self.callback_fg_sensor)
         while True:
             pose = self.pose_in_euclid()
-            if (0. < pose.x < self._scale) and (0 < pose.y < self._scale):
+            if (0. < pose.x < self._scale) and (0 < pose.y < self._scale) and (0 < pose.z < self._scale):
                 break
+            # self._goal_gps = self._pose_gps
+            # self._pub_next_goal_gps.publish(self._pose_gps)
             rospy.logdebug("{} Waiting....\npose read....\n{}".format(self.tag, pose))
             rospy.sleep(5)
-        rospy.sleep(5)
-        rospy.logdebug("{} Ready\npose read:\n{}".format(self.tag, pose))
-        # rospy.Subscriber("/UAV/{}/next_way_point_euclid".format(self._name), data_class=Pose,
-        #                  callback=self.callback_next_euclidean_way_point)
+        wait = 15 + np.random.randint(low=5, high=15)
+        while wait > 0:
+            rospy.logdebug("{} Waiting....{}".format(self.tag, wait))
+            wait -= 5
+            rospy.sleep(5)
+
+        self._pub_ready = rospy.Publisher('{}/ready'.format(self._name), data_class=Bool, queue_size=1)
+        rospy.Subscriber("/UAV/{}/next_way_point_euclid".format(self._name), data_class=euclidean_location,
+                         callback=self.callback_next_euclidean_way_point)
         self._pub_pose_gps = rospy.Publisher(self._name + '/pose_gps', data_class=geo_location, queue_size=10)
         self._pub_pose_euclid = rospy.Publisher(self._name + '/pose_euclid', data_class=euclidean_location, queue_size=10)
-
-        # pub_fly = rospy.Publisher("{}/fly_grad".format(self._name), data_class=String, queue_size=10)
-        # pub_fly.publish("fly_grad")
-
-        self._pose_gps.header.frame_id = self._name
+        self._pub_next_goal_gps = rospy.Publisher(self._name + '/next_way_point_gps', data_class=geo_location, queue_size=10)
+        self._pub_co2 = rospy.Publisher(self._name + '/co2', data_class=CO_2, queue_size=10)
+        self._pub_orientation_euler = rospy.Publisher(self._name + '/orientation_euler', data_class=orientation_euler, queue_size=10)
+        self._pub_humidity = rospy.Publisher(self._name + '/humidity', data_class=humidity, queue_size=10)
+        self._pub_temperature = rospy.Publisher(self._name + '/temperature', data_class=temperature, queue_size=10)
+        self._pub_vel_ms = rospy.Publisher(name="{}/vel_ms".format(self._name), data_class=twist_ms, queue_size=10)
+        self._pub_vel_euclid = rospy.Publisher(name="{}/vel_euclid".format(self._name), data_class=twist_euclid, queue_size=10)
 
         while not rospy.is_shutdown():
-            pub_ready.publish(True)
+            self._pub_ready.publish(True)
             self._pub_pose_gps.publish(self._pose_gps)
             self._pub_pose_euclid.publish(self.pose_in_euclid())
-
-            # if self._goal_gps is not None:
-            #     simple_goto(lat=self._goal_gps.position.y, lon=self._goal_gps.position.x, alt=self._goal_gps.position.z,
-            #                 callasign=self._name, sim=self._sim)
-            #
-            #     reached_lon = np.isclose(self._goal_gps.position.x, self.gps_loc.position.x,
-            #                              atol=self._tol_lon)
-            #     reached_lat = np.isclose(self._goal_gps.position.y, self.gps_loc.position.y,
-            #                              atol=self._tol_lat)
-            #     reached_alt = np.isclose(self._goal_gps.position.z, self.gps_loc.position.z,
-            #                              atol=self._tol_alt)
-            #
-            #     dif_lon = self.gps_loc.position.x - self._goal_gps.position.x
-            #     dif_lat = self.gps_loc.position.y - self._goal_gps.position.y
-            #     dif_alt = self.gps_loc.position.z - self._goal_gps.position.z
-            #
-            #     if reached_lat and reached_lon and reached_alt:
-            #         pos_eu = self.pose_in_euclid()
-            #         rospy.logdebug("{}[{}]Reached goal @(lon,lat,alt)=({},{},{}) goal({},{},{}) dif=({},{},{}) @(x,y,z)=({},{},{}) "
-            #                        "goal_eu=({},{},{})".format(self._tag, self.time_tag,
-            #             self.gps_loc.position.x,
-            #             self.gps_loc.position.y,
-            #             self.gps_loc.position.z,
-            #             self._goal_gps.position.x, self._goal_gps.position.y, self._goal_gps.position.z, dif_lon,
-            #             dif_lat, dif_alt, pos_eu.position.x, pos_eu.position.y, pos_eu.position.z,
-            #             self._goal_euclid.position.x, self._goal_euclid.position.y, self._goal_euclid.position.z))
-            #         self._goal_gps = None
-            #         self._goal_euclid = None
-            #     else:
-            #         pos_eu = self.pose_in_euclid()
-            #         rospy.logdebug("{}[{}]@(lon,lat,alt)=({},{},{}) goal({},{},{}) dif=({},{},{}) @(x,y,z)=({},{},{}) goal_eu=({},{},{})".format(
-            #             self._tag, del_t.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%H:%M:%S"),
-            #             self.gps_loc.position.x,
-            #             self.gps_loc.position.y,
-            #             self.gps_loc.position.z,
-            #             self._goal_gps.position.x, self._goal_gps.position.y, self._goal_gps.position.z,
-            #             dif_lon, dif_lat, dif_alt, pos_eu.position.x, pos_eu.position.y,
-            #             pos_eu.position.z,self._goal_euclid.position.x, self._goal_euclid.position.y,
-            #             self._goal_euclid.position.z))
-            #         pub_fly.publish("wait")
-            #
-            # else:
-            #     rospy.logdebug("{}[{}]Waiting for new goal".format(self._tag, del_t.datetime.fromtimestamp(
-            #         rospy.Time.now().to_time()).strftime("%H:%M:%S")))
-            #     pub_fly.publish("fly_grad")
-
+            self._pub_next_goal_gps.publish(self._goal_gps)
+            self._pub_co2.publish(self._co2)
+            self._pub_orientation_euler.publish(self._orientation)
+            self._pub_humidity.publish(self._humidity)
+            self._pub_temperature.publish(self._temperature)
+            self._pub_vel_ms.publish(self._velocity_ms)
+            self._pub_vel_euclid.publish(self.velocity_euclid)
             rate.sleep()
 
     def euclid_to_geo(self, NS, EW, UD):
@@ -174,7 +149,7 @@ class flightgear_quad_static(object):
         :param NS: set as y axis of euclidean coordinate lat
         :param EW: set as x axis of euclidean coordinate lon
         :param UD: set as z axis of eculidean coordinate alt
-        :rtype: Pose
+        :rtype: geo_location
         """
         pose = geo_location()
         lon = self._origin_lon + self._meters_per_disposition * EW / self._meters_per_lon
@@ -193,38 +168,45 @@ class flightgear_quad_static(object):
         :param lon: set as y axis of euclidean coordinate lon
         :param lat: set as x axis of euclidean coordinate lat
         :return: Pose in euclid
-        :rtype: Pose
+        :rtype: euclidean_location
         """
         pose = euclidean_location()
         pose.header.frame_id = self._name
-        lon = self._pose_gps.longitude
-        lat = self._pose_gps.latitude
-        alt = self._pose_gps.altitude
-        pose.x = ((lon - self._origin_lon)/(self._max_lon - self._origin_lon)) * float(self._scale)
-        pose.y = ((lat - self._origin_lat)/(self._max_lat - self._origin_lat)) * float(self._scale)
-        pose.z = ((alt - self._origin_alt)/(self._max_alt - self._origin_alt)) * float(self._scale)
-        if (lat < self._origin_lat or lon < self._origin_lon or alt >= self._max_alt or lon >= self._max_lon or lat >= self._max_lat) and self._is_ready:
-            rospy.logdebug("{} Out of boundary!!! pose={} (lon,lat,alt)=({},{},{})".format(
-                self.tag, pose.__getstate__(),self._pose_gps.longitude,
+        pose.x = ((self._pose_gps.longitude - self._origin_lon)/(self._max_lon - self._origin_lon)) * float(self._scale)
+        pose.y = ((self._pose_gps.latitude - self._origin_lat)/(self._max_lat - self._origin_lat)) * float(self._scale)
+        pose.z = ((self._pose_gps.altitude - self._origin_alt)/(self._max_alt - self._origin_alt)) * float(self._scale)
+        if (self._pose_gps.latitude < self._origin_lat or self._pose_gps.longitude < self._origin_lon or self._pose_gps.altitude >= self._max_alt or self._pose_gps.longitude >= self._max_lon or self._pose_gps.latitude >= self._max_lat) and self._is_ready:
+            rospy.logdebug("{} Loiter because went out of boundary!!! psoe={} (lon,lat,alt)=({},{},{})".format(
+                self.tag, pose.__getstate__(), self._pose_gps.longitude,
                 self._pose_gps.latitude, self._pose_gps.altitude))
+            # rospy.signal_shutdown("{} Went out of boundary".format(self.tag))
+            self._pub_ready(False)
         return pose
+
+    @property
+    def velocity_euclid(self):
+        """:rtype twist_euclid"""
+        vel = twist_euclid()
+        vel.header.frame_id = self._name
+        vel.x = (self._velocity_ms.x / (self._meters_per_lon * (self._max_lon - self._origin_lon))) * self._scale
+        vel.y = (self._velocity_ms.y / (self._meters_per_lat * (self._max_lat - self._origin_lat))) * self._scale
+        vel.z = (self._velocity_ms.z / (self._meters_per_alt * (self._max_alt - self._origin_alt))) * self._scale
+        return vel
 
     def callback_next_euclidean_way_point(self, goal_euclid):
         """
         :param goal_euclid: goal in euclidian coordinate
-        :type goal_euclid: Pose
+        :type goal_euclid: euclidean_location
         :return:
         """
         if goal_euclid is not None:
             self._goal_euclid = goal_euclid
             # longitude EW = x axis and latitude NS = y axis, E is +x, N is +y
-            self._goal_gps = self.euclid_to_geo(NS=goal_euclid.position.y, EW=goal_euclid.position.x,
-                                                UD=goal_euclid.position.z)
-
-            rospy.logdebug("{}New Goal (x,y,z)=({},{},{}) (lat,long,alt)=({},{},{})".format(self.tag,
-                self._goal_euclid.position.x, self._goal_euclid.position.y, self._goal_euclid.position.z,
-                self._goal_gps.position.y, self._goal_gps.position.x, self._goal_gps.position.z)
-            )
+            self._goal_gps = self.euclid_to_geo(NS=goal_euclid.y, EW=goal_euclid.x, UD=goal_euclid.z)
+            # rospy.logdebug("{}New Goal (x,y,z)=({},{},{}) (lat,long,alt)=({},{},{})".format(
+            #     self.tag, self._goal_euclid.x, self._goal_euclid.y, self._goal_euclid.z,
+            #     self._goal_gps.latitude, self._goal_gps.longitude, self._goal_gps.altitude)
+            # )
         else:
             rospy.logdebug("{} No goal waypoint received yet.".format(self.tag))
 
@@ -232,6 +214,27 @@ class flightgear_quad_static(object):
         """
         :type sensor: sensor_data
         """
+        self._pose_gps.header.frame_id = self._name
         self._pose_gps.latitude = float(sensor.Pos_n)
         self._pose_gps.longitude = float(sensor.Pos_e)
         self._pose_gps.altitude = float(sensor.Pos_d)
+
+        self._orientation.header.frame_id = self._name
+        self._orientation.roll = float(sensor.roll_deg)
+        self._orientation.pitch = float(sensor.pitch_deg)
+        self._orientation.yaw = float(sensor.yaw_deg)
+
+        self._temperature.header.frame_id = self._name
+        self._temperature.temperature_f = 1.8 * float(sensor.Temperature_degc) + 32.0
+
+        self._humidity.header.frame_id = self._name
+        self._humidity.rel_humidity = float(sensor.Relative_humidity)
+
+        self._co2.header.frame_id = self._name
+        self._co2.density = float(sensor.CO2Density)
+
+        self._velocity_ms.header.frame_id = self._name
+        self._velocity_ms.x = float(sensor.V_e_ms)
+        self._velocity_ms.y = float(sensor.V_n_ms)
+        self._velocity_ms.z = float(sensor.V_d_ms)
+
