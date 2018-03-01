@@ -269,9 +269,8 @@ class dummy_uav(object):
                 elif k == "co2":                p = self.phi_co2(ind)
                 prod = w * p
                 wsum += prod
-                if not np.isclose(w, 0):
-                    rospy.logdebug("{}:k={:20} F{}  {:1.3}={:1.3}*{:1.3} wsum {:1.3} mn={:1.3} mx={:1.3} {} {}".format(
-                        self.tag, ind, k, prod, w, p, wsum, mn, mx, wsum<mn, wsum>mx))
+                # rospy.logdebug("{}:k={:20} F{}  {:1.3}={:1.3}*{:1.3} wsum {:1.3} mn={:1.3} mx={:1.3} {} {}".format(
+                #         self.tag, ind, k, prod, w, p, wsum, mn, mx, wsum<mn, wsum>mx))
             F[ind] = wsum
             mx = max(wsum, mx)
             if mn > wsum:
@@ -434,7 +433,8 @@ class dummy_uav(object):
                 rospy.logerr("{}:{} Out center={}".format(self.tag, self.position, self._goal))
                 self._pub_goal_euclid.publish(self._goal)
             else:
-                self.fly_local_grad()
+                if self.name != "H":
+                    self.fly_local_grad()
                 # self._pub_goal_euclid.publish(self._goal)
 
             # ---------------------publishing own belief for visualization----------------------------------------------
