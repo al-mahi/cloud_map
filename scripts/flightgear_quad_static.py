@@ -27,10 +27,11 @@ class flightgear_quad_static(object):
         self._scale = int(rospy.get_param("/scale"))
         self._space = tuple([self._scale for _ in range(self._dim)])
         # cowboy cricket ground bowling end 36.133642, -97.076528
-        self._origin_lat = 36.1333333
-        self._origin_lon = -97.0771
-        self._origin_alt = 10.  # meter
-        self._meters_per_alt = 10.
+        self._origin_lat = 36.169097   #36.1333333
+        self._origin_lon = -97.088101  #-97.0771
+        self._sea_level_ft = int(rospy.get_param("/sea_level_ft"))
+        self._origin_alt = 50.
+        self._meters_per_alt = 8.
         self._meters_per_disposition = 10.
         self._meters_per_lat = 110961.03  # meters per degree of latitude for use near Stillwater
         self._meters_per_lon = 90037.25  # meters per degree of longitude
@@ -41,7 +42,7 @@ class flightgear_quad_static(object):
 
         self._max_lon = self._origin_lon + (self._meters_per_disposition * self._scale) / self._meters_per_lon
         self._max_lat = self._origin_lat + (self._meters_per_disposition * self._scale) / self._meters_per_lat
-        self._max_alt = self._origin_alt + (self._meters_per_disposition * self._scale)
+        self._max_alt = self._origin_alt + (self._meters_per_alt * self._scale)
         self._center_lon = (self._origin_lon + self._max_lon) / 2.
         self._center_lat = (self._origin_lat + self._max_lat) / 2.
         self._center_alt = (self._origin_alt + self._max_alt) / 2.
@@ -66,6 +67,7 @@ class flightgear_quad_static(object):
         self._is_ready = False
         self._pub_ready = None
         self._rospy_rate = 1
+
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.connect(("google.com", 80))
@@ -154,7 +156,7 @@ class flightgear_quad_static(object):
         pose = geo_location()
         lon = self._origin_lon + self._meters_per_disposition * EW / self._meters_per_lon
         lat = self._origin_lat + self._meters_per_disposition * NS / self._meters_per_lat
-        alt = self._origin_alt + self._meters_per_alt * UD
+        alt = self._origin_alt + self._meters_per_alt * UD + self._sea_level_ft
         pose.longitude = lon
         pose.latitude = lat
         pose.altitude = alt
@@ -176,10 +178,10 @@ class flightgear_quad_static(object):
         pose.y = ((self._pose_gps.latitude - self._origin_lat)/(self._max_lat - self._origin_lat)) * float(self._scale)
         pose.z = ((self._pose_gps.altitude - self._origin_alt)/(self._max_alt - self._origin_alt)) * float(self._scale)
         if (self._pose_gps.latitude < self._origin_lat or self._pose_gps.longitude < self._origin_lon or self._pose_gps.altitude >= self._max_alt or self._pose_gps.longitude >= self._max_lon or self._pose_gps.latitude >= self._max_lat) and self._is_ready:
-            rospy.logdebug("{} Loiter because went out of boundary!!! psoe={} (lon,lat,alt)=({},{},{})".format(
+            rospy.logdebug("{} Loiter because went out of boundary!!! pose={} (lon,lat,alt)=({},{},{})".format(
                 self.tag, pose.__getstate__(), self._pose_gps.longitude,
                 self._pose_gps.latitude, self._pose_gps.altitude))
-            # rospy.signal_shutdown("{} Went out of boundary".format(self.tag))
+            rospy.signal_shutdown("{} Went out of boundary".format(self.tag))
             self._pub_ready(False)
         return pose
 
@@ -203,10 +205,10 @@ class flightgear_quad_static(object):
             self._goal_euclid = goal_euclid
             # longitude EW = x axis and latitude NS = y axis, E is +x, N is +y
             self._goal_gps = self.euclid_to_geo(NS=goal_euclid.y, EW=goal_euclid.x, UD=goal_euclid.z)
-            # rospy.logdebug("{}New Goal (x,y,z)=({},{},{}) (lat,long,alt)=({},{},{})".format(
-            #     self.tag, self._goal_euclid.x, self._goal_euclid.y, self._goal_euclid.z,
-            #     self._goal_gps.latitude, self._goal_gps.longitude, self._goal_gps.altitude)
-            # )
+            rospy.logdebug("{}New Goal (x,y,z)=({},{},{}) (lat,long,alt)=({},{},{})".format(
+                self.tag, self._goal_euclid.x, self._goal_euclid.y, self._goal_euclid.z,
+                self._goal_gps.latitude, self._goal_gps.longitude, self._goal_gps.altitude)
+            )
         else:
             rospy.logdebug("{} No goal waypoint received yet.".format(self.tag))
 
@@ -217,7 +219,7 @@ class flightgear_quad_static(object):
         self._pose_gps.header.frame_id = self._name
         self._pose_gps.latitude = float(sensor.Pos_n)
         self._pose_gps.longitude = float(sensor.Pos_e)
-        self._pose_gps.altitude = float(sensor.Pos_d)
+        self._pose_gps.altitude = float(sensor.Pos_d) - self._sea_level_ft
 
         self._orientation.header.frame_id = self._name
         self._orientation.roll = float(sensor.roll_deg)

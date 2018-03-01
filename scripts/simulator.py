@@ -69,7 +69,7 @@ class Simulator:
                 "{}".format(commands["poslon"]),
                 "{}".format(commands["posalt"])
             ]
-        elif for_model == 'fixed_wing':
+        elif for_model == 'ufo':
             command_list = [
                 "{}".format(commands["aileron"]),
                 "{}".format(commands["elevator"]),

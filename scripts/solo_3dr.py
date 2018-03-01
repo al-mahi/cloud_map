@@ -29,8 +29,8 @@ class solo_3dr(object):
         self._scale = int(rospy.get_param("/scale"))
         self._space = tuple([scale for _ in range(dim)])
         # cowboy cricket ground bowling end 36.133642, -97.076528
-        self._origin_lat = 36.1333333
-        self._origin_lon = -97.0771
+        self._origin_lat = 36.169097   #36.1333333
+        self._origin_lon = -97.088101  #-97.0771
         self._origin_alt = 4.  # meter
         if name == 'A':
             self._origin_alt = 4.1  # meter

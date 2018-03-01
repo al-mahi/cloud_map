@@ -60,6 +60,7 @@ class dummy_uav(object):
         self._goal = euclidean_location()
         self._explored = np.zeros(self._space)
         self._co2_density = np.zeros(self._space)
+        self._high_co2s = {(43, 22, 7): 0.6032779812812805, (40, 23, 6): 0.5902690291404724}  # type: dict[tuple, float]
         self._goal.header.frame_id = self._name
         self._rospy_rate = 1
         self._logger_i = 0
@@ -78,112 +79,76 @@ class dummy_uav(object):
                                              0 <= ind[2] < self._scale, window), dtype='int')
         return window
 
-    def phi_avoid_collision(self, indices):
+    def phi_avoid_collision(self, ind):
         """:rtype np.ndarray"""
-        fgx, fgy, fgz = self._pose.x, self._pose.y, self._pose.z
-        for nbnm in self.neighbour_names:
-            F = np.zeros(self._space)
-            nb = self._param_q[nbnm]
-            vel = self._vel_euclid
-            f1x, f1y, f1z = nb.pose_euclid.x, nb.pose_euclid.y, nb.pose_euclid.z
-            # all phi should be normalized wrt the global possible maximum for the defined space. max of this distance
-            # if mistakenly normalized by local max then the affect is even if the actual cell value is low in that
-            # space it will be treated wrt to other local cell and the max int local will be weighted
-
-            def distance(arr):
-                d1 = np.sqrt((arr[0] - f1x) ** 2. + (arr[1] - f1y) ** 2. + (arr[2] - f1z) ** 2.)
-                return d1
-
-            # avoid global calculation of intentions because it is slow and decision are made locally
-            # indices = np.ndindex(self._space)
-            # F = np.array(map(distance, indices), dtype=np.float32).reshape(self.wspace)
-            c = self._scale - 1
-            gmax = max(distance([0, 0, 0]),
-                       distance([0, 0, c]),
-                       distance([0, c, 0]),
-                       distance([0, c, c]),
-                       distance([c, 0, 0]),
-                       distance([c, 0, c]),
-                       distance([c, c, 0]),
-                       distance([c, c, c]),
-                       )
-            for ind in indices:
-                #  larger distance is interesting. avoidance is a repulsive intention
-                d1 = distance(ind)
-                if d1 > 10: F[tuple(ind)] += (1./len(self.neighbour_names))
-                else: F[tuple(ind)] += (d1/(len(self.neighbour_names)*gmax))
-        for ind in indices:
-            #  larger distance is interesting. avoidance is a repulsive intention
-            F[tuple(ind)] = 1 - F[tuple(ind)]
-
-        return F
-
-    def phi_avoid_collision_indirect(self, indices):
-        """:rtype np.ndarray"""
-        fgx, fgy, fgz = self._pose.x, self._pose.y, self._pose.z
-        F = np.zeros(self._space)
-        gmax = 1000.
-        for nbnm in self._indirect_neighbors_names:
-
-            nb = self._param_q_indirect[nbnm]
-            f1x, f1y, f1z = nb.pose_euclid.x, nb.pose_euclid.y, nb.pose_euclid.z
-            # all phi should be normalized wrt the global possible maximum for the defined space. max of this distance
-            # if mistakenly normalized by local max then the affect is even if the actual cell value is low in that
-            # space it will be treated wrt to other local cell and the max int local will be weighted
-
-            def distance(arr):
-                d1 = np.sqrt((arr[0] - f1x) ** 2. + (arr[1] - f1y) ** 2. + (arr[2] - f1z) ** 2.)
-                return d1
-
-            # avoid global calculation of intentions because it is slow and decision are made locally
-            # indices = np.ndindex(self._space)
-            # F = np.array(map(distance, indices), dtype=np.float32).reshape(self.wspace)
-            c = self._scale - 1
-            gmax = max(distance([0, 0, 0]),
-                       distance([0, 0, c]),
-                       distance([0, c, 0]),
-                       distance([0, c, c]),
-                       distance([c, 0, 0]),
-                       distance([c, 0, c]),
-                       distance([c, c, 0]),
-                       distance([c, c, c]),
-                       )
-            for ind in indices:
-                #  larger distance is interesting. avoidance is a repulsive intention
-                d1 = distance(ind)
-                if d1 > 10: F[tuple(ind)] += (1./len(self.neighbour_names))
-                else: F[tuple(ind)] += (d1/(len(self.neighbour_names)*gmax))
-        for ind in indices:
-            #  larger distance is interesting. avoidance is a repulsive intention
-            F[tuple(ind)] = 1 - F[tuple(ind)]
-
-        return F
-
-    def phi_explore(self, indices):
-        """:rtype np.ndarray"""
-        F = np.zeros(self._space)
-        mx = -np.inf
-        for ind in indices:
-            v = self._explored[tuple(ind)]
-            F[tuple(ind)] = v
-            mx = max(v, mx)
-        F /= F.max() #mx
-        return F
-
-    def phi_boundary(self, indices):
-        """:rtype np.ndarray"""
-        F = np.zeros(self._space)
-        th = 4
-        r = self._scale/2
-        center = r * np.ones(3)
-        for ind in indices:
-            d = max(np.abs(ind - center))
-            if d + th > r: F[tuple(ind)] = d
-
         # all phi should be normalized wrt the global possible maximum for the defined space. max of this distance
         # if mistakenly normalized by local max then the affect is even if the actual cell value is low in that
         # space it will be treated wrt to other local cell and the max int local will be weighted
-        return F / r
+        mx_d = 10.  # internal param
+        sum = 0.
+        for nbnm in self._neighbors_names:
+            nb = self._param_q[nbnm]
+            f1x, f1y, f1z = nb.pose_euclid.x, nb.pose_euclid.y, nb.pose_euclid.z
+            d = np.sqrt(np.sum((ind[0] - f1x) ** 2. + (ind[1] - f1y) ** 2. + (ind[2] - f1z) ** 2.))
+            if d > mx_d: d = mx_d
+            sum += d
+        res = 1. - sum/(len(self._neighbors_names) * mx_d)
+        if res < 0.:
+            rospy.logerr("{}:phi avoid collision scaling error! res={} sum={}".format(self.tag, res, sum))
+            return -0.0
+        return res
+
+    def phi_avoid_collision_indirect(self, ind):
+        """:rtype np.ndarray"""
+        if len(self._indirect_neighbors_names)==0:
+            return 0.
+        try:
+            mx_d = 10.  # internal param
+            sum = 0.
+            for nbnm in self._indirect_neighbors_names:
+                nb = self._param_q_indirect[nbnm]
+                f1x, f1y, f1z = nb.pose_euclid.x, nb.pose_euclid.y, nb.pose_euclid.z
+                d = np.sqrt(np.sum((ind[0] - f1x) ** 2. + (ind[1] - f1y) ** 2. + (ind[2] - f1z) ** 2.))
+                if d > mx_d: d = mx_d
+                sum += d
+            res = 1. - sum/(len(self._indirect_neighbors_names) * mx_d)
+            if res < 0.:
+                rospy.logerr("{}:phi avoid collision scaling error! res={} sum={}".format(self.tag, res, sum))
+                return -0.0
+            return res
+        except KeyError as ex:
+            rospy.logerr("{}: phi_avoid_collision_indirect {} indrect neighbors {}".format(self.tag, ex.message, self._indirect_neighbors_names))
+            return 1.
+
+    def phi_co2(self, ind):
+        """:rtype np.ndarray"""
+        res = 1.
+        fmax = -np.inf
+        for co2ind in self._high_co2s.keys():
+            if self._explored[ind] > 0: return 1.
+            f = np.sqrt(np.sum((np.array(co2ind)-np.array(ind)-self._wsize)**4.))
+            fmax = max(f, fmax)
+            f = np.sqrt(np.sum((np.array(co2ind)-np.array(ind)+self._wsize)**4.))
+            fmax = max(f, fmax)
+
+        for co2ind in self._high_co2s.keys():
+            rho = self._high_co2s[co2ind]
+            d = np.sqrt(np.sum((np.array(co2ind)-np.array(ind))**4))
+            f = (1.-rho) * d
+        return f/fmax
+
+    def phi_explore(self, ind):
+        """:rtype np.ndarray"""
+        return min(4., self._explored[ind])/4. if self._explored[ind]>0. else 0.
+
+    def phi_boundary(self, ind):
+        """:rtype np.ndarray"""
+        th = 4
+        rmax = self._scale/2
+        center = rmax * np.ones(3)
+        r = max(np.abs(ind - center))
+        if r + th > rmax: return r/rmax
+        return 0.
 
     def phi_tunnel(self, indices):
         """:rtype np.ndarray"""
@@ -210,88 +175,8 @@ class dummy_uav(object):
         return np.array(self._pose.__getstate__()[1:])
 
     @property
-    def neighbour_names(self):
-        """
-        :rtype: list[str]
-        """
-        return self._neighbors_names
-
-    @property
     def tag(self):
         return "{}[{}]".format(self.name, dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%H:%M:%S"))
-
-    def callback_pose(self, msg):
-        """
-        :type msg: euclidean_location
-        """
-        self._param_q[msg.header.frame_id].pose_euclid = msg
-        self._param_q[msg.header.frame_id].explored.append(msg.__getstate__()[1:])
-        if msg.header.frame_id == self.name:
-            self._pose = msg
-        if 0 < msg.x < self._scale and 0 < msg.y < self._scale and 0 < msg.z < self._scale:
-            self._explored[int(np.floor(msg.x)), int(np.floor(msg.y)), int(np.floor(msg.z))] += 1.
-            self._explored[int(np.round(msg.x)), int(np.round(msg.y)), int(np.round(msg.z))] += 1.
-            # if self._logger_i % self._rospy_rate == 0:
-            #     print  "{} explored[{} {} {}]={} explored[{} {} {}]={}".format(self.name,
-            #     int(np.floor(msg.x)), int(np.floor(msg.y)), int(np.floor(msg.z)),
-            #     self._explored[int(np.floor(msg.x)), int(np.floor(msg.y)), int(np.floor(msg.z))],
-            #     int(np.round(msg.x)), int(np.round(msg.y)), int(np.round(msg.z)),
-            #     self._explored[int(np.round(msg.x)), int(np.round(msg.y)), int(np.round(msg.z))])
-
-    def callback_belief_params(self, msg):
-        """:type msg: belief_param"""
-        if msg.header.frame_id == self.name:
-            for x, y, z, co2, nn in zip(msg.pos_xs, msg.pos_ys, msg.pos_zs, msg.co2s, msg.neighbors):
-                intx = int(np.floor(x))
-                inty = int(np.floor(y))
-                intz = int(np.floor(z))
-                self._explored[intx, inty, intz] += 1.
-                self._co2_density[intx, inty, intz] = co2
-                intx = int(np.round(x))
-                inty = int(np.round(y))
-                intz = int(np.round(z))
-                self._explored[intx, inty, intz] += 1.
-                if not self._param_q_indirect.has_key(nn):
-                    self._param_q_indirect[nn] = Param()
-                self._param_q_indirect[nn].pose_euclid.x = x
-                self._param_q_indirect[nn].pose_euclid.y = y
-                self._param_q_indirect[nn].pose_euclid.z = z
-                self._indirect_neighbors_names.add(nn)
-
-    def callback_co2(self, msg):
-        """:type msg: CO_2"""
-        self._param_q[msg.header.frame_id].co2 = msg
-
-    def callback_orientation_euler(self, msg):
-        """:type msg: orientation_euler"""
-        self._param_q[msg.header.frame_id].orientation_euler = msg
-        if msg.header.frame_id == self.name:
-            self._orientation = msg
-
-    def callback_humidity(self, msg):
-        """:type msg: humidity"""
-        self._param_q[msg.header.frame_id].humidity = msg
-
-    def callback_temperature(self, msg):
-        """:type msg: temperature"""
-        self._param_q[msg.header.frame_id].temperature = msg
-
-    def callback_vel_euclid(self, msg):
-        """:type msg: twist_euclid"""
-        if msg.header.frame_id == self._name:
-            self._vel_euclid = msg
-
-    def callback_human_goal_euclid(self, msg):
-        """:type msg: euclidean_location"""
-        print "human "
-        msg.header.frame_id = self.name
-        self._goal = msg
-
-    def callback_is_robot_ready(self, ready):
-        """
-        :type ready: Bool
-        """
-        self._solo_is_ready = ready.data
 
     def fly_grad(self):
         self._marked_as_out = False
@@ -357,92 +242,128 @@ class dummy_uav(object):
         #  intention weights, scale 0~1. Phi function must return value in scale 0~1
         weight = {
             "boundary":             1.00,  # better not to loose the robot by letting it out of a boundary
-            "collision":            1.00,  # damage due to collision may be repairable
-            "collision_indirect":   1.00,
-            "tunnel":               0.00,
-            "valley":               0.00,
+            "collision":            0.50,  # damage due to collision may be repairable
+            "collision_indirect":   0.80,
             "explored":             1.00,
         }
 
+        if self.name=="A":
+            weight["co2"] = 1.00
         F = np.zeros(self._space)
         windices = self.windices(old_pos)
-        for k in weight.keys():
-            # careful because win
-            w = weight[k]
-            if k == "collision":
-                intention = self.phi_avoid_collision(windices)
-            elif k == "collision_indirect":
-                intention = self.phi_avoid_collision_indirect(windices)
-            elif k == "boundary":
-                intention = self.phi_boundary(windices)
-            elif k == "tunnel":
-                intention = self.phi_tunnel(windices)
-            elif k == "valley":
-                intention = self.phi_valley(windices)
-            elif k == "explored":
-                intention = self.phi_explore(windices)
-            F += (w * intention)
-
-        # F /= F.max()
-
-        # Rz = lambda theta: np.array([
-        #     [np.cos(theta), -np.sin(theta), 0.],
-        #     [np.sin(theta),  np.cos(theta), 0.],
-        #     [0,                         0.,  1.]
-        # ])
-        #
-        # Ry = lambda theta: np.array([
-        #     [ np.cos(theta), 0., -np.sin(theta)],
-        #     [            0., 1.,             0.],
-        #     [-np.sin(theta), 0.,  np.cos(theta)]
-        # ])
-        #
-        # L = self._wsize
-        # Oa = np.zeros(3)
-        # Ob = np.array([L, 0, 0])
-        # v = np.array([self._vel_euclid.x, self._vel_euclid.y, self._vel_euclid.z])
-        # v = v / np.max(np.abs(v))
-        # v = v * L + t
-        # Pb = v
-        # Pa = old_pos
-        #
-        # # theta_z = np.deg2rad(yaw % 360)
-        # # theta_y = np.rad2deg(pitch % 360)
-        # # Ra = np.dot(Rz(theta_z), Oa.T)
-        # # Ra = np.dot(Ry(theta_y), Ra.T)
-        # # Pa = Ra + t
-        # # Rb = np.dot(Rz(theta_z), Ob.T)
-        # # Rb = np.dot(Ry(theta_y), Rb.T)
-        # # Pb_theta = Rb + t
-        #
-        # tip = np.round(Pb)
-        #
-        # def lm(ind):
-        #     return [ind, F[tuple(ind)], np.sum(np.abs(np.array(ind) - tip)) ]
-        #
-        # argdist = map(lm, windices)
-        # argmin = sorted(argdist, key=lambda x: (x[1], x[2]))
-        argmin = windices[0]
         mn = np.inf
-        ss = ""
+        mx = -np.inf
+        argmin = None
         for ind in windices:
-            v = F[tuple(ind)]
-            ss += "F{}={:.4f} ".format(tuple(ind), F[tuple(ind)])
-            if mn > v and tuple(ind) != tuple(np.array(np.floor(self.position), dtype='int')):
-                mn = v
-                argmin = tuple(ind)
-        if self._logger_i%self._rospy_rate==0:
-            print "{}{}".format(self.name, self.position), ss, argmin, mn
+            wsum = 0
+            ind = tuple(ind)
+            for k in weight.keys():
+                # careful because win
+                p = 1.
+                w = weight[k]
+                if np.isclose(w, 0.): continue
+                if   k == "collision":          p = self.phi_avoid_collision(ind)
+                elif k == "collision_indirect": p = self.phi_avoid_collision_indirect(ind)
+                elif k == "boundary":           p = self.phi_boundary(ind)
+                elif k == "explored":           p = self.phi_explore(ind)
+                elif k == "co2":                p = self.phi_co2(ind)
+                prod = w * p
+                wsum += prod
+                if not np.isclose(w, 0):
+                    rospy.logdebug("{}:k={:20} F{}  {:1.3}={:1.3}*{:1.3} wsum {:1.3} mn={:1.3} mx={:1.3} {} {}".format(
+                        self.tag, ind, k, prod, w, p, wsum, mn, mx, wsum<mn, wsum>mx))
+            F[ind] = wsum
+            mx = max(wsum, mx)
+            if mn > wsum:
+                mn = wsum
+                argmin = ind
+
         self._goal.x = argmin[0]
         self._goal.y = argmin[1]
         self._goal.z = argmin[2]
-        np.set_printoptions(precision=3)
-        if self._logger_i%self._rospy_rate==0:
-            print "{}{}".format(self.name, self.position), ss, argmin, mn
-            rospy.logdebug(
-                "{}:{}->{} wsize={}".format(self.tag, old_pos[:], np.array(self._goal.__getstate__()[1:]), self._wsize))
         self._pub_goal_euclid.publish(self._goal)
         self._joint_belief = F
+
+    def callback_pose(self, msg):
+        """
+        :type msg: euclidean_location
+        """
+        self._param_q[msg.header.frame_id].pose_euclid = msg
+        self._param_q[msg.header.frame_id].explored.append(msg.__getstate__()[1:])
+        if msg.header.frame_id == self.name:
+            self._pose = msg
+        if 0 < msg.x < self._scale and 0 < msg.y < self._scale and 0 < msg.z < self._scale:
+            self._explored[int(np.floor(msg.x)), int(np.floor(msg.y)), int(np.floor(msg.z))] += 1.
+            self._explored[int(np.round(msg.x)), int(np.round(msg.y)), int(np.round(msg.z))] += 1.
+            # if self._logger_i % self._rospy_rate == 0:
+            #     print  "{} explored[{} {} {}]={} explored[{} {} {}]={}".format(self.name,
+            #     int(np.floor(msg.x)), int(np.floor(msg.y)), int(np.floor(msg.z)),
+            #     self._explored[int(np.floor(msg.x)), int(np.floor(msg.y)), int(np.floor(msg.z))],
+            #     int(np.round(msg.x)), int(np.round(msg.y)), int(np.round(msg.z)),
+            #     self._explored[int(np.round(msg.x)), int(np.round(msg.y)), int(np.round(msg.z))])
+
+    def callback_belief_params(self, msg):
+        """:type msg: belief_param"""
+        if msg.header.frame_id == self.name:
+            for x, y, z, co2, nn in zip(msg.pos_xs, msg.pos_ys, msg.pos_zs, msg.co2s, msg.neighbors):
+                # xi, yi, zi = map(int, np.floor([x, y, z]))
+                # xr, yr, zr = map(int, np.round([x, y, z]))
+                # self._explored[xi, yi, zi] += 1.
+                # self._explored[xr, yr, xr] += 1.
+                if not self._param_q_indirect.has_key(nn):
+                    self._param_q_indirect[nn] = Param()
+                self._param_q_indirect[nn].pose_euclid.x = x
+                self._param_q_indirect[nn].pose_euclid.y = y
+                self._param_q_indirect[nn].pose_euclid.z = z
+                self._indirect_neighbors_names.add(nn)
+
+    def callback_co2(self, msg):
+        """:type msg: CO_2"""
+        self._param_q[msg.header.frame_id].co2 = msg
+        if msg.density>.1:
+            if msg.header.frame_id==self.name:
+                xi, yi, zi = map(int, np.floor(self.position))
+                xr, yr, zr = map(int, np.round(self.position))
+                self._co2_density[xi, yi, zi] = msg.density
+                self._co2_density[xr, yr, zr] = msg.density
+            else:
+                print "msg co2 recvd!!!!!!!!!!!!"
+                pos = self._param_q[msg.header.frame_id].pose_euclid
+                xi, yi, zi = map(int, np.floor([pos.x, pos.y, pos.z]))
+                xr, yr, zr = map(int, np.round([pos.x, pos.y, pos.z]))
+                self._high_co2s[(xi, yi, zi)] = float(msg.density)
+                self._high_co2s[(xr, yr, zr)] = float(msg.density)
+
+    def callback_orientation_euler(self, msg):
+        """:type msg: orientation_euler"""
+        self._param_q[msg.header.frame_id].orientation_euler = msg
+        if msg.header.frame_id == self.name:
+            self._orientation = msg
+
+    def callback_humidity(self, msg):
+        """:type msg: humidity"""
+        self._param_q[msg.header.frame_id].humidity = msg
+
+    def callback_temperature(self, msg):
+        """:type msg: temperature"""
+        self._param_q[msg.header.frame_id].temperature = msg
+
+    def callback_vel_euclid(self, msg):
+        """:type msg: twist_euclid"""
+        if msg.header.frame_id == self._name:
+            self._vel_euclid = msg
+
+    def callback_human_goal_euclid(self, msg):
+        """:type msg: euclidean_location"""
+        print "human "
+        msg.header.frame_id = self.name
+        self._goal = msg
+
+    def callback_is_robot_ready(self, ready):
+        """
+        :type ready: Bool
+        """
+        self._solo_is_ready = ready.data
 
     def take_off(self):
         """
@@ -470,11 +391,11 @@ class dummy_uav(object):
                          callback=self.callback_human_goal_euclid,
                          data_class=euclidean_location)
 
-        for from_uav in self.neighbour_names:
+        for from_uav in self._neighbors_names:
             self._param_q[from_uav] = Param()
         self._param_q[self.name] = Param()
 
-        for from_uav in self.neighbour_names:
+        for from_uav in self._neighbors_names:
             if from_uav:
                 rospy.Subscriber(name="/{}/{}/pose_euclid".format(vendor, from_uav), data_class=euclidean_location,
                                  callback=self.callback_pose)
@@ -539,7 +460,7 @@ def launch_uav(name, start_at):
         rospy.logdebug("Launch UAV {} with neighbors {}".format(uav.name, neighbors))
         for n in neighbors:
             # todo validate the format of n
-            uav.neighbour_names.append(n)
+            uav._neighbors_names.append(n)
 
-    print("UAV {}d launcing {} with neighbors {}".format(dim, name, neighbors))
+    print("UAV {}d launching {} with neighbors {}".format(dim, name, neighbors))
     uav.take_off()

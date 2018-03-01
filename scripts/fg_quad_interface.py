@@ -31,10 +31,13 @@ class fg_quad_interface(object):
         self._is_ready = False
         self._reached_goal = False
         self._rospy_rate = 1
+        self._sea_level_ft = int(rospy.get_param("/sea_level_ft"))
 
     def callback_goal_gps(self, goal):
         """:type goal: geo_location"""
         self._goal = goal
+        rospy.logdebug("{}:[{},{},{}]->{}".format(self.tag, self._sensor.Pos_e, self._sensor.Pos_n, self._sensor.Pos_d,
+                                                  goal.__getstate__()[1:]))
         # if self._reached_goal and goal:
         #     # print "reached goal new goal ", goal.__getstate__()[1:]
         #     self._goal = goal
@@ -42,7 +45,7 @@ class fg_quad_interface(object):
 
     def callback_is_robot_ready(self, msg):
         """:type msg: Bool"""
-        self._is_ready = Bool(msg.data)
+        self._is_ready = bool(msg.data)
 
     def callback_fg_sensor(self, sensor):
         """:type sensor: sensor_data"""
@@ -50,7 +53,7 @@ class fg_quad_interface(object):
 
     @property
     def tag(self):
-        return "{}[{}]".format(self.name, dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%H:%M:%S"))
+        return "{}[{}]".format(self._name, dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%H:%M:%S"))
 
     def simple_goto(self):
         """
@@ -79,14 +82,14 @@ class fg_quad_interface(object):
 
         distance = 0.0
 
-        i=0
+        i = 0
 
         while not rospy.is_shutdown():
-            i = (i+1)%30
+            i = (i + 1) % 30
             fg_data = sim.FGRecv()
             sensor.Pos_n = fg_data[0]
             sensor.Pos_e = fg_data[1]
-            sensor.Pos_d = fg_data[2]
+            sensor.Pos_d = (fg_data[2])  # alt from sea level in feet.
             sensor.V_n_ms = fg_data[3]
             sensor.V_e_ms = fg_data[4]
             sensor.V_d_ms = fg_data[5]
@@ -121,7 +124,7 @@ class fg_quad_interface(object):
             posalt = float(sensor.Pos_d)
             lat1 = float(sensor.Pos_n)
             lon1 = float(sensor.Pos_e)
-            alt1 = float(sensor.Pos_d)
+            alt1 = float(sensor.Pos_d)  # feet
             heading = sensor.yaw_deg
 
             lat2 = self._goal.latitude
@@ -135,48 +138,14 @@ class fg_quad_interface(object):
             distlat = dlat * 110961.03
             distlon = dlon * 90037.25
             distalt = dalt
-            distance = sqrt(distlat**2 + distlon**2 + distalt**2)
-            # if self._is_ready:
-            #     print self._name, distance
-            # if distance < 10.:
-            #     print "reached goal", self._name, distance
-            #     self._reached_goal = True
-
-            # if distalt > 0:
-            #     resalt = posalt + self._velocity
-            # if distalt < 0:
-            #     resalt = posalt - self._velocity
-            # if distlat > 0:
-            #     reslat = poslat + self._velocity/110961.03
-            # if distlat < 0:
-            #     reslat = poslat - self._velocity/110961.03
-            # if distlon > 0:
-            #     reslon = poslon + self._velocity/90037.25
-            # if distlon < 0:
-            #     reslon = poslon - self._velocity/90037.25
-
-            dist_linspace_num = int(round(distance))
-            # dist_linspace_num = self._rospy_rate
-            # if self._is_ready: print "disnum ", dist_linspace_num, distance
-            # if distance > 15. and self._is_ready:
-            #     linspace_lat = np.linspace(lat1, lat2, dist_linspace_num)
-            #     linspace_lon = np.linspace(lon1, lon2, dist_linspace_num)
-            #     linspace_alt = np.linspace(alt1, alt2, dist_linspace_num)
-            #     reslat = linspace_lat[1]
-            #     reslon = linspace_lon[1]
-            #     resalt = linspace_alt[1]
-            # else:
-            #     reslat = lat2
-            #     reslon = lon2
-            #     resalt = alt2
-            #     self._reached_goal = True
+            distance = sqrt(distlat ** 2 + distlon ** 2 + distalt ** 2)
 
             reslat = lat2
             reslon = lon2
             resalt = alt2
 
             if not self._is_ready or distance > 40:
-                # print "quad not ready"
+                print "{} quad not ready because is d={}>40?{} is_ready?{}".format(self._name, distance, distance > 40, self._is_ready)
                 reslat = lat1
                 reslon = lon1
                 resalt = alt1
@@ -184,11 +153,11 @@ class fg_quad_interface(object):
             commands = {
                 "throttle": float(0.00),
                 "elevator": float(0.0),
-                "aileron":  float(0.00),
-                "rudder":   float(0.00),
-                "poslat":   float(reslat),  # float(reslat),
-                "poslon":   float(reslon),  # float(reslon),
-                "posalt":   float(resalt)  # float(resalt)
+                "aileron": float(0.00),
+                "rudder": float(0.00),
+                "poslat": float(reslat),  # float(reslat),
+                "poslon": float(reslon),  # float(reslon),
+                "posalt": float(resalt)  # float(resalt)
             }
             # if self._is_ready:
             # if i%self._rospy_rate == 0:

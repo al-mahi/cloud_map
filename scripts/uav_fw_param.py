@@ -80,7 +80,7 @@ class dummy_uav(object):
         """:rtype np.ndarray"""
         fgx, fgy, fgz = self._pose.x, self._pose.y, self._pose.z
         F = np.zeros(self._space)
-        for nbnm in self.neighbour_names:
+        for nbnm in self._neighbors_names:
             nb = self._param_q[nbnm]
             vel = self._vel_euclid
             f1x, f1y, f1z = nb.pose_euclid.x, nb.pose_euclid.y, nb.pose_euclid.z
@@ -111,9 +111,9 @@ class dummy_uav(object):
                 #  larger distance is interesting. avoidance is a repulsive intention
                 d1 = np.sqrt((ind[0] - f1x) ** 2. + (ind[1] - f1y) ** 2. + (ind[2] - f1z) ** 2.)
                 if d1 > 15:
-                    F[tuple(ind)] += (1./len(self.neighbour_names))
+                    F[tuple(ind)] += (1./len(self._neighbors_names))
                 else:
-                    F[tuple(ind)] += (distance(ind)/(len(self.neighbour_names) * gmax))
+                    F[tuple(ind)] += (distance(ind)/(len(self._neighbors_names) * gmax))
         for ind in indices:
             #  larger distance is interesting. avoidance is a repulsive intention
             F[tuple(ind)] = 1. - F[tuple(ind)]
@@ -157,8 +157,8 @@ class dummy_uav(object):
     def calc_param_send(self, nb):
         msg_send = belief_param()
         msg_send.header.frame_id = nb
-        msg_send.num_of_neighbor = len(self.neighbour_names) - 1
-        for nn in self.neighbour_names:
+        msg_send.num_of_neighbor = len(self._neighbors_names) - 1
+        for nn in self._neighbors_names:
             if nn != nb:
                 msg_send.neighbors+=nn
                 msg_send.pos_xs.append(self._param_q[nn].pose_euclid.x)
@@ -175,13 +175,6 @@ class dummy_uav(object):
     def position(self):
         """:rtype: np.ndarray"""
         return np.array(self._pose.__getstate__()[1:])
-
-    @property
-    def neighbour_names(self):
-        """
-        :rtype: list[str]
-        """
-        return self._neighbors_names
 
     @property
     def tag(self):
@@ -307,6 +300,7 @@ class dummy_uav(object):
             # careful because win
             windices = self.windices(old_pos)
             w = weight[k]
+            if np.isclose(w, 0): continue
             if k=="collision": intention = self.phi_avoid_collision(windices)
             elif k=="boundary": intention = self.phi_boundary(windices)
             elif k=="tunnel": intention = self.phi_tunnel(windices)
@@ -397,11 +391,11 @@ class dummy_uav(object):
         rospy.Subscriber(name='/{}/{}/human_goal_euclid'.format(vendor, self._name), callback=self.callback_human_goal_euclid,
                          data_class=euclidean_location)
 
-        for from_uav in self.neighbour_names:
+        for from_uav in self._neighbors_names:
             self._param_q[from_uav] = Param()
         self._param_q[self.name] = Param()
 
-        for from_uav in self.neighbour_names:
+        for from_uav in self._neighbors_names:
             if from_uav:
                 rospy.Subscriber(name="/{}/{}/pose_euclid".format(vendor, from_uav), data_class=euclidean_location,
                                  callback=self.callback_pose)
@@ -430,8 +424,9 @@ class dummy_uav(object):
                 self._pub_goal_euclid.publish(self._goal)
             else:
                 self.fly_local_grad()
-
-            for nb in self.neighbour_names:
+                # self._pub_goal_euclid.publish(self._goal)
+                
+            for nb in self._neighbors_names:
                 msg_send = self.calc_param_send(nb)
                 pub_belief.publish(msg_send)
 
@@ -458,7 +453,7 @@ def launch_uav(name, start_at):
         rospy.logdebug("Launch UAV {} with neighbors {}".format(uav.name, neighbors))
         for n in neighbors:
             # todo validate the format of n
-            uav.neighbour_names.append(n)
+            uav._neighbors_names.append(n)
 
     print("UAV {}d launcing {} with neighboues {}".format(dim, name, neighbors))
     uav.take_off()

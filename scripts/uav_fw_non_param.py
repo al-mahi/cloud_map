@@ -136,7 +136,7 @@ class dummy_uav(object):
             return np.nan_to_num(res)
 
         neighbors_belief = np.zeros(shape=self._space)
-        for v in self.neighbour_names:
+        for v in self._neighbors_names:
             if not self._msg_received[v].data is None:
                 nb = np.array(np.asanyarray(self._msg_received[v].data, dtype=np.float32).reshape(self._space))
                 if nb.max() > 0.:
@@ -168,7 +168,7 @@ class dummy_uav(object):
         for key in ["tempchange", "humiditychange", "humanannoying", "humaninteresting", "boundary"]:
             own_belief -= scale_dist(self._phi[key], low=weight_low[key], high=weight_high[key])
 
-        for v in self.neighbour_names:
+        for v in self._neighbors_names:
             if not self._msg_received[v].data is None:
                 nb = np.array(np.asanyarray(self._msg_received[v].data, dtype=np.float32).reshape(self._space))
                 nb = scale_dist(nb, low=weight_low["neighbors"], high=weight_high["neighbors"])
@@ -361,7 +361,7 @@ class dummy_uav(object):
         rospy.Subscriber("/{}/{}/pose_euclid".format(vendor, self._name), Pose, callback=self.callback_sensor_pose)
         # rospy.Subscriber("/solo/{}/distance_from_goal".format(self._name), Float32, callback=self.callback_goal_reached)
 
-        for from_uav in self.neighbour_names:
+        for from_uav in self._neighbors_names:
             # initialize all other uavs intention uniformly
             init_belief = Belief()
             init_belief.header.frame_id = "{}>{}".format(from_uav, self.name)
@@ -385,7 +385,7 @@ class dummy_uav(object):
             # if self._solo_wants_to_fly:
             self.fly()
             # self._solo_wants_to_fly = False
-            for to_uav in self.neighbour_names:
+            for to_uav in self._neighbors_names:
                 msg = Belief()
                 msg.header.frame_id = "{}>{}".format(self.name, to_uav)
                 msg.data = self._msg_send[to_uav].ravel()
@@ -400,7 +400,7 @@ class dummy_uav(object):
             msg_viz.header.stamp = rospy.Time.now()
             pub_self.publish(msg_viz)
 
-            for from_uav in self.neighbour_names:
+            for from_uav in self._neighbors_names:
                 msg_viz = self._msg_received[from_uav]
                 msg_viz.header.frame_id = from_uav
                 pub_inbox.publish(msg_viz)

@@ -34,8 +34,8 @@ class flightgear_quad(object):
         self._scale = int(rospy.get_param("/scale"))
         self._space = tuple([self._scale for _ in range(self._dim)])
         # cowboy cricket ground bowling end 36.133642, -97.076528
-        self._origin_lat = 36.1333333
-        self._origin_lon = -97.0771
+        self._origin_lat = 36.169097   #36.1333333
+        self._origin_lon = -97.088101  #-97.0771
         self._origin_alt = 5.  # meter
         self._meters_per_alt = 4.
         self._meters_per_disposition = 4.
@@ -235,10 +235,10 @@ class flightgear_quad(object):
             self._goal_gps = self.euclid_to_geo(NS=goal_euclid.position.y, EW=goal_euclid.position.x,
                                                 UD=goal_euclid.position.z)
 
-            rospy.logdebug("{}[{}]New Goal (x,y,z)=({},{},{}) (lat,long,alt)=({},{},{})".format(
-                self._tag, dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%H:%M:%S"),
-                self._goal_euclid.position.x, self._goal_euclid.position.y, self._goal_euclid.position.z,
-                self._goal_gps.position.y, self._goal_gps.position.x, self._goal_gps.position.z)
-            )
+            # rospy.logdebug("{}[{}]New Goal (x,y,z)=({},{},{}) (lat,long,alt)=({},{},{})".format(
+            #     self._tag, dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%H:%M:%S"),
+            #     self._goal_euclid.position.x, self._goal_euclid.position.y, self._goal_euclid.position.z,
+            #     self._goal_gps.position.y, self._goal_gps.position.x, self._goal_gps.position.z)
+            # )
         else:
             rospy.logdebug("{} No goal waypoint received yet.".format(self._tag))

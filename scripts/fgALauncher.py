@@ -17,11 +17,11 @@ def euclid_to_geo(NS, EW, UD):
     :param UD: set as z axis of eculidean coordinate alt
     :rtype: geo_location
     """
-    origin_lat = 36.1333333
-    origin_lon = -97.0771
-    origin_alt = 5.  # meter
-    meters_per_alt = 4.
-    meters_per_disposition = 4.
+    origin_lat = 36.169097   #36.1333333
+    origin_lon = -97.088101  #-97.0771
+    origin_alt = 50. + int(rospy.get_param("/sea_level_ft"))
+    meters_per_alt = 8.
+    meters_per_disposition = 10.
     meters_per_lat = 110961.03  # meters per degree of latitude for use near Stillwater
     meters_per_lon = 90037.25  # meters per degree of longitude
     pose = geo_location()
@@ -45,8 +45,9 @@ if __name__ == '__main__':
     server_ip = s.getsockname()[0]
     port = s.getsockname()[1]
     s.close()
-    start_at = euclid_to_geo(NS=25., EW=12.5, UD=10)
+    start_at = euclid_to_geo(NS=25., EW=12.5, UD=26)
+    print 'start', start_at
     FGthread(
         server_id = 1, instance=instance_num, controller_hostIP=server_ip,
-        control_input_config='ControlInputMageQuadTeleport',freq_in=1, freq_out=1L, vehicle=vehicle,
-        lat=start_at.latitude, lon=start_at.longitude, alt=start_at.altitude, iheading=45, ivel=20, ithrottle=0.0)
+        control_input_config='ControlInputMageQuadTeleport',freq_in=1, freq_out=1, vehicle=vehicle,
+        lat=start_at.latitude, lon=start_at.longitude, alt=start_at.altitude, iheading=0, ivel=20, ithrottle=0.0)

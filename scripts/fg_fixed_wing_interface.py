@@ -61,7 +61,7 @@ class fg_fw_interface(object):
         self._port_recv = port_recv
         self._goal = geo_location()
         self._sensor = sensor_data()
-
+        self._sea_level_ft = int(rospy.get_param("/sea_level_ft"))
         self._previous_error_alt = 0.
         self._previous_error_deg = 0.
 
@@ -229,7 +229,7 @@ class fg_fw_interface(object):
             max_delta_lat, max_delta_lon = 0.00144194768199/10, 0.00177704227973/10
 
             max_aileron = 0.6
-            max_elevator = 0.1
+            max_elevator = 0.2
             max_throttle = 0.005
 
             kp_alerion = 0.006/360.
@@ -265,6 +265,6 @@ class fg_fw_interface(object):
                 self.tag, i, heading, Bearing, err_theta, self._previous_error_deg,  der_theta, kp_alerion * err_theta, kd_alerion * der_theta, turn, aileron))
 
             commands = {"throttle":throttle, "elevator": elevator, "aileron": aileron, "rudder": 0.0}
-            sim.FGSend(commands, for_model="fixed_wing")
+            sim.FGSend(commands, for_model="ufo")
             pub_sensor.publish(sensor)
             rate.sleep()
