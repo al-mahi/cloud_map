@@ -3,21 +3,25 @@
     <arg name="dim" value="3"/>
     <!--scale of the space-->
     <arg name="scale" value="50"/>
-    <arg name="As_neighbors" value="B"/>
+    <arg name="As_neighbors" value="B_D"/>
     <arg name="Bs_neighbors" value="A_C"/>
     <arg name="Cs_neighbors" value="B"/>
+    <arg name="Ds_neighbors" value="A_B_C"/>
     <!--<arg name="Cs_neighbors" value="A"/>-->
     <param name="As_vendor" value="flightgear"/>
     <param name="Bs_vendor" value="flightgear"/>
     <param name="Cs_vendor" value="flightgear"/>
+    <param name="Ds_vendor" value="flightgear"/>
 
     <param name="As_type" value="quad"/>
     <param name="Bs_type" value="ufo"/>
     <param name="Cs_type" value="quad"/>
+    <param name="Ds_type" value="ufo"/>
 
     <param name="As_instance" value="1"/>
     <param name="Bs_instance" value="2"/>
     <param name="Cs_instance" value="3"/>
+    <param name="Ds_instance" value="4"/>
 
     <param name="dim" value="$(arg dim)"/>
     <param name="scale" value="$(arg scale)"/>
@@ -38,23 +42,31 @@
             <param name="neighbors" value="$(arg Cs_neighbors)"/>
         </node>
 
+        <node name="D" pkg="cloud_map" type="uavD.py" respawn="false" output="screen">
+            <param name="name" value="D"/>
+            <param name="neighbors" value="$(arg Ds_neighbors)"/>
+        </node>
+
         <node name="heart_bit_fly" pkg="cloud_map" type="heart_bit_fly.py" output="screen"></node>
     </group>
 
     <group ns="Visual">
         <!--based on the dimension appropriate visualization will be generated-->
-        <node name="A" pkg="cloud_map" type="visualize_uavA.py" respawn="false" output="screen">
-            <param name="name" value="A"/>
-            <param name="neighbors" value="$(arg As_neighbors)"/>
-        </node>
+        <!--<node name="A" pkg="cloud_map" type="visualize_uavA.py" respawn="false" output="screen">-->
+            <!--<param name="name" value="A"/>-->
+            <!--<param name="neighbors" value="$(arg As_neighbors)"/>-->
+        <!--</node>-->
         <node name="B" pkg="cloud_map" type="visualize_uavB.py" respawn="false" output="screen">
             <param name="name" value="B"/>
             <param name="neighbors" value="$(arg Bs_neighbors)"/>
         </node>
-        <node name="C" pkg="cloud_map" type="visualize_uavC.py" respawn="false" output="screen">
-            <param name="name" value="C"/>
-            <!--separate neighbour names by _ ; If A had B,C neighbour value="B_C"-->
-            <param name="neighbors" value="$(arg Cs_neighbors)"/>
+        <!--<node name="C" pkg="cloud_map" type="visualize_uavC.py" respawn="false" output="screen">-->
+            <!--<param name="name" value="C"/>-->
+            <!--<param name="neighbors" value="$(arg Cs_neighbors)"/>-->
+        <!--</node>-->
+        <node name="D" pkg="cloud_map" type="visualize_uavD.py" respawn="false" output="screen">
+            <param name="name" value="D"/>
+            <param name="neighbors" value="$(arg Ds_neighbors)"/>
         </node>
         <!--<node name="T" pkg="cloud_map" type="visualize_Temp.py" respawn="false" output="screen"></node>-->
         <!--<node name="H" pkg="cloud_map" type="visualize_Humidity.py" respawn="false" output="screen"></node>-->
@@ -67,16 +79,19 @@
         <node name="A" pkg="cloud_map" type="fgA.py" respawn="false" output="screen"></node>
         <node name="B" pkg="cloud_map" type="fgB.py" respawn="false" output="screen"></node>
         <node name="C" pkg="cloud_map" type="fgC.py" respawn="false" output="screen"></node>
+        <node name="D" pkg="cloud_map" type="fgD.py" respawn="false" output="screen"></node>
     </group>
     <group ns="fg_launcher">
         <node name="A" pkg="cloud_map" type="fgALauncher.py" respawn="false" output="screen"></node>
         <node name="B" pkg="cloud_map" type="fgBLauncher.py" respawn="false" output="screen"></node>
         <node name="C" pkg="cloud_map" type="fgCLauncher.py" respawn="false" output="screen"></node>
+        <node name="D" pkg="cloud_map" type="fgDLauncher.py" respawn="false" output="screen"></node>
     </group>
     <group ns="fg_interface">
         <node name="A" pkg="cloud_map" type="fgA_pid.py" respawn="false" output="screen"></node>
         <node name="B" pkg="cloud_map" type="fgB_pid.py" respawn="false" output="screen"></node>
         <node name="C" pkg="cloud_map" type="fgC_pid.py" respawn="false" output="screen"></node>
+        <node name="D" pkg="cloud_map" type="fgD_pid.py" respawn="false" output="screen"></node>
     </group>
 
     <!--<group ns="Sensors">-->

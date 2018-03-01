@@ -45,7 +45,7 @@ class Visualization(object):
             rospy.Subscriber("/UAV/" + nm + "/pose", euclidean_location, callback=self.callback_pose)
 
         # Attaching 3D axis to the figure
-        fig_num = {"A": 0, "B": 1, "C": 2}
+        fig_num = {"A": 0, "B": 1, "C": 2, "D": 3}
         fig = plt.figure(fig_num[self.name])
         ax1self = fig.add_subplot(1, 1, 1, projection='3d')
         x, y, z = np.meshgrid(np.arange(0, self.d, dtype='int'), np.arange(0, self.d, dtype='int'), np.arange(0, self.d, dtype='int'))
