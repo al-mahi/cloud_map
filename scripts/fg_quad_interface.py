@@ -144,7 +144,7 @@ class fg_quad_interface(object):
             reslon = lon2
             resalt = alt2
 
-            if not self._is_ready or distance > 40:
+            if not self._is_ready or distance > 150:
                 print "{} quad not ready because is d={}>40?{} is_ready?{}".format(self._name, distance, distance > 40, self._is_ready)
                 reslat = lat1
                 reslon = lon1

@@ -94,7 +94,8 @@ class Visualization(object):
         ax.set_yticks(np.linspace(0., self.d, num=5.))
         ax.set_zticks(np.linspace(0., self.d, num=5.))
 
-        ax.set_title("{}'s joint frame#{}".format(self.name, num))
+        # ax.set_title("{}'s joint frame#{}".format(self.name, num))
+        ax.set_title("{}'s joint belief".format(self.name))
         t = self._intention_self
         # ind = np.where((t > np.percentile(t, self._cutoff_percentile))
         #                | (t < np.percentile(t, 100.-self._cutoff_percentile))
@@ -105,12 +106,14 @@ class Visualization(object):
         norm = mpl.colors.Normalize(vmin=np.min(self._intention_self), vmax=np.max(self._intention_self), clip=True)
         x, y, z = ind[0], ind[1], ind[2]
         # ax.text(self.pose[0], self.pose[1], self.pose[2], "{}({:.1f},{:.1f},{:.1f})".format(self.name, self.pose[0], self.pose[1], self.pose[2]), fontsize='small')
+        # ax.text(self.pose[0], self.pose[1], self.pose[2], "{}({:.1f},{:.1f},{:.1f})".format(self.name,self.pose[0], self.pose[1], self.pose[2]), fontsize='small')
         ax.text(self.pose[0], self.pose[1], self.pose[2], "{}".format(self.name), fontsize='small')
-        ax.text(self._goal_euclid[0], self._goal_euclid[1], self._goal_euclid[2], "G", fontsize='small')
+        # ax.text(self._goal_euclid[0], self._goal_euclid[1], self._goal_euclid[2], "G", fontsize='small')
         for nm in self.neighbor_names:
             if self._pose_received.has_key(nm):
                 p3 = self._pose_received[nm]
-                ax.text(p3[0], p3[1], p3[2], "{}({:.1f},{:.1f},{:.1f})".format(nm, p3[0], p3[1], p3[2]), fontsize='small')
+                # ax.text(p3[0], p3[1], p3[2], "{}({:.1f},{:.1f},{:.1f})".format(nm, p3[0], p3[1], p3[2]), fontsize='small')
+                ax.text(p3[0], p3[1], p3[2], "{}".format(nm, p3[0], p3[1], p3[2]), fontsize='small')
         p = ax.scatter(x, y, z, c=t[ind], norm=norm, alpha=.6)
         if all(val is not None for val in self._path_history.values()):
             try:

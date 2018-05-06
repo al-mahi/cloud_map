@@ -3,12 +3,20 @@
     <arg name="dim" value="3"/>
     <!--scale of the space-->
     <arg name="scale" value="50"/>
+
     <arg name="As_neighbors" value="B_D"/>
     <arg name="Bs_neighbors" value="A_C_H"/>
     <arg name="Cs_neighbors" value="B"/>
     <arg name="Ds_neighbors" value="A_B_C_H"/>
     <arg name="Hs_neighbors" value="B_D"/>
-    <!--<arg name="Cs_neighbors" value="A"/>-->
+
+    <!--<arg name="As_neighbors" value="B"/>-->
+    <!--<arg name="Bs_neighbors" value="C"/>-->
+    <!--<arg name="Cs_neighbors" value="B"/>-->
+    <!--<arg name="Ds_neighbors" value="A_B_C_H"/>-->
+    <!--<arg name="Hs_neighbors" value="B_D"/>-->
+
+
     <param name="As_vendor" value="flightgear"/>
     <param name="Bs_vendor" value="flightgear"/>
     <param name="Cs_vendor" value="flightgear"/>

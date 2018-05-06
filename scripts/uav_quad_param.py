@@ -60,7 +60,8 @@ class dummy_uav(object):
         self._goal = euclidean_location()
         self._explored = np.zeros(self._space)
         self._co2_density = np.zeros(self._space)
-        self._high_co2s = {(43, 22, 7): 0.6032779812812805, (40, 23, 6): 0.5902690291404724}  # type: dict[tuple, float]
+        # self._high_co2s = {(43, 22, 7): 0.6032779812812805, (40, 23, 6): 0.5902690291404724}  # type: dict[tuple, float]
+        self._high_co2s = {}  # type: dict[tuple, float]
         self._goal.header.frame_id = self._name
         self._rospy_rate = 1
         self._logger_i = 0
@@ -124,6 +125,8 @@ class dummy_uav(object):
         """:rtype np.ndarray"""
         res = 1.
         fmax = -np.inf
+        if len(self._high_co2s.keys()) == 0:
+            return 1.
         for co2ind in self._high_co2s.keys():
             if self._explored[ind] > 0: return 1.
             f = np.sqrt(np.sum((np.array(co2ind)-np.array(ind)-self._wsize)**4.))

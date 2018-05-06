@@ -9,7 +9,6 @@ from cloud_map.msg import *
 import numpy as np
 
 
-
 class flightgear_fixed_wing(object):
     def __init__(self, name, instance, server_id, server_ip, port_send, port_recv, dim=3, scale=16):
         """
@@ -44,6 +43,7 @@ class flightgear_fixed_wing(object):
         self._max_lon = self._origin_lon + (self._meters_per_disposition * self._scale) / self._meters_per_lon
         self._max_lat = self._origin_lat + (self._meters_per_disposition * self._scale) / self._meters_per_lat
         self._max_alt = self._origin_alt + (self._meters_per_alt * self._scale)
+        print("mx lon lat alt = {}, {}, {}".format(self._max_lon, self._max_lat, self._max_alt))
         self._center_lon = (self._origin_lon + self._max_lon) / 2.
         self._center_lat = (self._origin_lat + self._max_lat) / 2.
         self._center_alt = (self._origin_alt + self._max_alt) / 2.
@@ -109,7 +109,7 @@ class flightgear_fixed_wing(object):
             self._pub_next_goal_gps.publish(self._pose_gps)
             rospy.logdebug("{} Waiting....\npose read....\n{}".format(self.tag, pose))
             rospy.sleep(5)
-        wait = np.random.randint(low=5, high=15)
+        wait = 60 + np.random.randint(low=5, high=15)
         while wait > 0:
             rospy.logdebug("{} Waiting....{}".format(self.tag, wait))
             wait -= 5

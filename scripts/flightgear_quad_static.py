@@ -111,7 +111,7 @@ class flightgear_quad_static(object):
             # self._pub_next_goal_gps.publish(self._pose_gps)
             rospy.logdebug("{} Waiting....\npose read....\n{}".format(self.tag, pose))
             rospy.sleep(5)
-        wait = 15 + np.random.randint(low=5, high=15)
+        wait = 90 + np.random.randint(low=5, high=15)
         while wait > 0:
             rospy.logdebug("{} Waiting....{}".format(self.tag, wait))
             wait -= 5

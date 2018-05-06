@@ -46,7 +46,7 @@ if __name__ == '__main__':
     port = s.getsockname()[1]
     s.close()
     start_at = euclid_to_geo(NS=25., EW=12.5, UD=26)
-    print 'start', start_at
+    print name, ' start ', start_at
     FGthread(
         server_id = 1, instance=instance_num, controller_hostIP=server_ip,
         control_input_config='ControlInputMageQuadTeleport',freq_in=1, freq_out=1, vehicle=vehicle,
