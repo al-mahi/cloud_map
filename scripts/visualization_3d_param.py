@@ -7,7 +7,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.animation as animation
 import os
 import rospy
-from cloud_map.msg import euclidean_location, Belief, path_history
+from cloud_map.msg import euclidean_location, Belief #, path_history
 import datetime as dt
 
 class Visualization(object):
