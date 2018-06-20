@@ -7,7 +7,7 @@ from __future__ import print_function
 import numpy as np
 import dronekit
 import rospy
-from geometry_msgs.msg import Pose, Point, Quaternion, Twist, Vector3
+from cloud_map.msg import euclidean_location, geo_location
 from tf.transformations import quaternion_from_euler
 from std_msgs.msg import String, Float32, Bool
 import time
@@ -23,14 +23,15 @@ class solo_3dr(object):
         self._name = name
         self._port = port
         self._tag = "[solo_{}]".format(port)
-        self._goal_gps = Pose(Point(0., 0., 0.), Quaternion(*quaternion_from_euler(0., 0., 0.)))
-        self._goal_euclid = Pose()
+        self._goal_gps = geo_location()
+        self._goal_euclid = euclidean_location()
         self._dim = int(rospy.get_param("/dim"))
         self._scale = int(rospy.get_param("/scale"))
         self._space = tuple([scale for _ in range(dim)])
         # cowboy cricket ground bowling end 36.133642, -97.076528
-        self._origin_lat = 36.169097   #36.1333333
-        self._origin_lon = -97.088101  #-97.0771
+        # OSU Unmanned aircraft station 36.16196, -96.8359
+        self._origin_lat = 36.16196  # 36.1336420 # 36.1336420 # 36.1333333  # 36.1690970
+        self._origin_lon = -96.8359 #-97.076528 # -97.076528 # -97.077100  # -97.088101
         self._origin_alt = 4.  # meter
         if name == 'A':
             self._origin_alt = 4.1  # meter
@@ -43,9 +44,9 @@ class solo_3dr(object):
         self._tol_lon = 1.e-7
         self._tol_alt = 0.5
 
-        self._max_lon = self._origin_lon + (self._meters_per_disposition * self._scale) / self._meters_per_lon
-        self._max_lat = self._origin_lat + (self._meters_per_disposition * self._scale) / self._meters_per_lat
-        self._max_alt = self._origin_alt + (self._meters_per_disposition * self._scale)
+        self._max_lon = round(self._origin_lon + (self._meters_per_disposition * self._scale) / self._meters_per_lon, 6)
+        self._max_lat = round(self._origin_lat + (self._meters_per_disposition * self._scale) / self._meters_per_lat, 6)
+        self._max_alt = round(self._origin_alt + (self._meters_per_disposition * self._scale), 6)
 
         try:
             self._vehicle = dronekit.connect("udpin:0.0.0.0:{}".format(port))
@@ -95,7 +96,7 @@ class solo_3dr(object):
         pub_ready = rospy.Publisher('{}/ready'.format(self._name), data_class=Bool, queue_size=1)
         self._vehicle.simple_takeoff(self._origin_alt)
         while True:
-            rospy.logdebug("{}[{}] Altitude: {}".format(self._tag,
+            rospy.logdebug("{}[{}] Takeoff Altitude: {}".format(self._tag,
                                                         dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime(
                                                             "%H:%M:%S"),
                                                         self._vehicle.location.global_relative_frame.alt))
@@ -107,33 +108,35 @@ class solo_3dr(object):
             pub_ready.publish(Bool(False))
             rospy.sleep(8)
 
-        self._goal_euclid = Pose(Point(start_at_euclid[0], start_at_euclid[1], start_at_euclid[2]), Quaternion(
-            *quaternion_from_euler(0., 0., 0.)))
-        self._goal_gps = self.euclid_to_geo(NS=self._goal_euclid.position.y, EW=self._goal_euclid.position.x,
-                                            UD=self._goal_euclid.position.z)
+        self._goal_euclid.x = start_at_euclid[0]
+        self._goal_euclid.y = start_at_euclid[1]
+        self._goal_euclid.z = start_at_euclid[2]
+
+        self._goal_gps = self.euclid_to_geo(NS=self._goal_euclid.y, EW=self._goal_euclid.x,
+                                            UD=self._goal_euclid.z)
         # longitude EW = x axis and latitude NS = y axis
         # send solo to initial location
         self._vehicle.simple_goto(
             dronekit.LocationGlobalRelative(
-                lat=self._goal_gps.position.y, lon=self._goal_gps.position.x, alt=self._goal_gps.position.z),
+                lat=self._goal_gps.latitude, lon=self._goal_gps.longitude, alt=self._goal_gps.altitude),
             groundspeed=10.
         )
         rospy.logdebug("{}[{}]Sending to initial goal (x,y,z)=({}) (lon, lat, alt)=({},{},{}) tol=({},{},{})".format(
             self._tag, dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%H:%M:%S"),
-            start_at_euclid, self._goal_gps.position.y, self._goal_gps.position.x, self._goal_gps.position.z,
+            start_at_euclid, self._goal_gps.longitude, self._goal_gps.latitude, self._goal_gps.altitude,
             self._tol_lon, self._tol_lat, self._tol_alt)
         )
 
         while True:
-            reached_lon = np.isclose(self._goal_gps.position.x, self._vehicle.location.global_relative_frame.lon,
+            reached_lon = np.isclose(self._goal_gps.longitude, self._vehicle.location.global_relative_frame.lon,
                                      atol=self._tol_lon)
-            reached_lat = np.isclose(self._goal_gps.position.y, self._vehicle.location.global_relative_frame.lat,
+            reached_lat = np.isclose(self._goal_gps.latitude, self._vehicle.location.global_relative_frame.lat,
                                      atol=self._tol_lat)
-            reached_alt = np.isclose(self._goal_gps.position.z, self._vehicle.location.global_relative_frame.alt,
+            reached_alt = np.isclose(self._goal_gps.altitude, self._vehicle.location.global_relative_frame.alt,
                                      atol=self._tol_alt)
-            dif_lon = self._vehicle.location.global_relative_frame.lon - self._goal_gps.position.x
-            dif_lat = self._vehicle.location.global_relative_frame.lat - self._goal_gps.position.y
-            dif_alt = self._vehicle.location.global_relative_frame.alt - self._goal_gps.position.z
+            dif_lon = self._vehicle.location.global_relative_frame.lon - self._goal_gps.longitude
+            dif_lat = self._vehicle.location.global_relative_frame.lat - self._goal_gps.latitude
+            dif_alt = self._vehicle.location.global_relative_frame.alt - self._goal_gps.altitude
 
             if reached_lat and reached_lon and reached_alt:
                 rospy.logdebug("{}[{}]Reached initial goal".format(self._tag, dt.datetime.fromtimestamp(
@@ -148,50 +151,50 @@ class solo_3dr(object):
                 self._vehicle.location.global_relative_frame.lon,
                 self._vehicle.location.global_relative_frame.lat,
                 self._vehicle.location.global_relative_frame.alt,
-                self._goal_gps.position.x, self._goal_gps.position.y, self._goal_gps.position.z, dif_lon, dif_lat,
-                dif_alt, pose.position.x, pose.position.y, pose.position.z, )
+                self._goal_gps.longitude, self._goal_gps.latitude, self._goal_gps.altitude, dif_lon, dif_lat,
+                dif_alt, pose.x, pose.y, pose.z, )
             )
             pub_ready.publish(Bool(False))
             rospy.sleep(3)
 
         pub_ready.publish(True)
-        rospy.Subscriber("/UAV/{}/next_way_point_euclid".format(self._name), data_class=Pose,
+        rospy.Subscriber("/UAV/{}/next_way_point_euclid".format(self._name), data_class=euclidean_location,
                          callback=self.callback_next_euclidean_way_point)
         rospy.Subscriber("/UAV/{}/land".format(self._name), data_class=String, callback=self.callback_land)
         rospy.Subscriber("/UAV/{}/loiter".format(self._name), data_class=String, callback=self.callback_loiter)
 
-        self._pub_pose_gps = rospy.Publisher(self._name + '/pose_gps', data_class=Pose, queue_size=10)
-        self._pub_pose_euclid = rospy.Publisher(self._name + '/pose_euclid', data_class=Pose, queue_size=10)
+        self._pub_pose_gps = rospy.Publisher(self._name + '/pose_gps', data_class=geo_location, queue_size=10)
+        self._pub_pose_euclid = rospy.Publisher(self._name + '/pose_euclid', data_class=euclidean_location, queue_size=10)
         pub_fly = rospy.Publisher("{}/fly_grad".format(self._name), data_class=String, queue_size=10)
 
         pub_fly.publish("fly_grad")
 
         while not rospy.is_shutdown():
-            pose_gps = Pose()
-            pose_gps.position.x = self._vehicle.location.global_relative_frame.lon
-            pose_gps.position.y = self._vehicle.location.global_relative_frame.lat
-            pose_gps.position.z = self._vehicle.location.global_relative_frame.alt
+            pose_gps = geo_location()
+            pose_gps.longitude = self._vehicle.location.global_relative_frame.lon
+            pose_gps.latitude = self._vehicle.location.global_relative_frame.lat
+            pose_gps.altitude = self._vehicle.location.global_relative_frame.alt
             self._pub_pose_gps.publish(pose_gps)
             self._pub_pose_euclid.publish(self.pose_in_euclid())
 
             if self._goal_gps is not None:
                 self._vehicle.simple_goto(
                     dronekit.LocationGlobalRelative(
-                        lat=self._goal_gps.position.y, lon=self._goal_gps.position.x, alt=self._goal_gps.position.z
+                        lat=self._goal_gps.latitude, lon=self._goal_gps.longitude, alt=self._goal_gps.altitude
                     ),
                     groundspeed=4.
                 )
 
-                reached_lon = np.isclose(self._goal_gps.position.x, self._vehicle.location.global_relative_frame.lon,
+                reached_lon = np.isclose(self._goal_gps.longitude, self._vehicle.location.global_relative_frame.lon,
                                          atol=self._tol_lon)
-                reached_lat = np.isclose(self._goal_gps.position.y, self._vehicle.location.global_relative_frame.lat,
+                reached_lat = np.isclose(self._goal_gps.latitude, self._vehicle.location.global_relative_frame.lat,
                                          atol=self._tol_lat)
-                reached_alt = np.isclose(self._goal_gps.position.z, self._vehicle.location.global_relative_frame.alt,
+                reached_alt = np.isclose(self._goal_gps.altitude, self._vehicle.location.global_relative_frame.alt,
                                          atol=self._tol_alt)
 
-                dif_lon = self._vehicle.location.global_relative_frame.lon - self._goal_gps.position.x
-                dif_lat = self._vehicle.location.global_relative_frame.lat - self._goal_gps.position.y
-                dif_alt = self._vehicle.location.global_relative_frame.alt - self._goal_gps.position.z
+                dif_lon = self._vehicle.location.global_relative_frame.lon - self._goal_gps.longitude
+                dif_lat = self._vehicle.location.global_relative_frame.lat - self._goal_gps.latitude
+                dif_alt = self._vehicle.location.global_relative_frame.alt - self._goal_gps.altitude
 
                 if reached_lat and reached_lon and reached_alt:
                     pos_eu = self.pose_in_euclid()
@@ -201,9 +204,9 @@ class solo_3dr(object):
                         self._vehicle.location.global_relative_frame.lon,
                         self._vehicle.location.global_relative_frame.lat,
                         self._vehicle.location.global_relative_frame.alt,
-                        self._goal_gps.position.x, self._goal_gps.position.y, self._goal_gps.position.z, dif_lon,
-                        dif_lat, dif_alt, pos_eu.position.x, pos_eu.position.y, pos_eu.position.z,
-                        self._goal_euclid.position.x, self._goal_euclid.position.y, self._goal_euclid.position.z))
+                        self._goal_gps.longitude, self._goal_gps.latitude, self._goal_gps.altitude, dif_lon,
+                        dif_lat, dif_alt, pos_eu.x, pos_eu.y, pos_eu.z,
+                        self._goal_euclid.x, self._goal_euclid.y, self._goal_euclid.z))
                     self._goal_gps = None
                     self._goal_euclid = None
                 else:
@@ -213,10 +216,10 @@ class solo_3dr(object):
                         self._vehicle.location.global_relative_frame.lon,
                         self._vehicle.location.global_relative_frame.lat,
                         self._vehicle.location.global_relative_frame.alt,
-                        self._goal_gps.position.x, self._goal_gps.position.y, self._goal_gps.position.z,
-                        dif_lon, dif_lat, dif_alt, pos_eu.position.x, pos_eu.position.y,
-                        pos_eu.position.z,self._goal_euclid.position.x, self._goal_euclid.position.y,
-                        self._goal_euclid.position.z))
+                        self._goal_gps.longitude, self._goal_gps.latitude, self._goal_gps.altitude,
+                        dif_lon, dif_lat, dif_alt, pos_eu.x, pos_eu.y,
+                        pos_eu.z,self._goal_euclid.x, self._goal_euclid.y,
+                        self._goal_euclid.z))
                     pub_fly.publish("wait")
 
             else:
@@ -234,15 +237,15 @@ class solo_3dr(object):
         :param NS: set as y axis of euclidean coordinate lat
         :param EW: set as x axis of euclidean coordinate lon
         :param UD: set as z axis of eculidean coordinate alt
-        :rtype: Pose
+        :rtype: geo_location
         """
-        pose = Pose()
+        pose = geo_location()
         lon = self._origin_lon + self._meters_per_disposition * EW / self._meters_per_lon
         lat = self._origin_lat + self._meters_per_disposition * NS / self._meters_per_lat
         alt = self._origin_alt + self._meters_per_alt * UD
-        pose.position.x = lon
-        pose.position.y = lat
-        pose.position.z = alt
+        pose.longitude = lon
+        pose.latitude = lat
+        pose.altitude = alt
         return pose
 
     def pose_in_euclid(self):
@@ -253,18 +256,19 @@ class solo_3dr(object):
         :param lon: set as y axis of euclidean coordinate lon
         :param lat: set as x axis of euclidean coordinate lat
         :return: Pose in euclid
-        :rtype: Pose
+        :rtype: euclidean_location
         """
-        pose = Pose()
+        pose = euclidean_location()
+        pose.header.frame_id = self._name
         lon = self._vehicle.location.global_relative_frame.lon
         lat = self._vehicle.location.global_relative_frame.lat
         alt = self._vehicle.location.global_relative_frame.alt
-        pose.position.x = ((lon - self._origin_lon)/(self._max_lon - self._origin_lon)) * float(self._scale)
-        pose.position.y = ((lat - self._origin_lat)/(self._max_lat - self._origin_lat)) * float(self._scale)
-        pose.position.z = ((alt - self._origin_alt)/(self._max_alt - self._origin_alt)) * float(self._scale)
+        pose.x = ((lon - self._origin_lon)/(self._max_lon - self._origin_lon)) * float(self._scale)
+        pose.y = ((lat - self._origin_lat)/(self._max_lat - self._origin_lat)) * float(self._scale)
+        pose.z = ((alt - self._origin_alt)/(self._max_alt - self._origin_alt)) * float(self._scale)
         if (lat < self._origin_lat or lon < self._origin_lon or alt >= self._max_alt or lon >= self._max_lon or lat >= self._max_lat) and self._is_ready:
             rospy.logdebug("{} Loiter because went out of boundary!!! psoe={} (lon,lat,alt)=({},{},{})".format(
-                self._tag, pose.position.__getstate__(),self._vehicle.location.global_relative_frame.lon,
+                self._tag, [pose.x, pose.y, pose.z], self._vehicle.location.global_relative_frame.lon,
                 self._vehicle.location.global_relative_frame.lat, self._vehicle.location.global_relative_frame.alt))
             self._vehicle.mode = dronekit.VehicleMode("LOITER")
             rospy.signal_shutdown("{} Went out of boundary".format(self._tag))
@@ -273,19 +277,19 @@ class solo_3dr(object):
     def callback_next_euclidean_way_point(self, goal_euclid):
         """
         :param goal_euclid: goal in euclidian coordinate
-        :type goal_euclid: Pose
+        :type goal_euclid: euclidean_location
         :return:
         """
         if goal_euclid is not None:
             self._goal_euclid = goal_euclid
             # longitude EW = x axis and latitude NS = y axis, E is +x, N is +y
-            self._goal_gps = self.euclid_to_geo(NS=goal_euclid.position.y, EW=goal_euclid.position.x,
-                                                UD=goal_euclid.position.z)
+            self._goal_gps = self.euclid_to_geo(NS=goal_euclid.y, EW=goal_euclid.x,
+                                                UD=goal_euclid.z)
 
             rospy.logdebug("{}[{}]New Goal (x,y,z)=({},{},{}) (lat,long,alt)=({},{},{})".format(
                 self._tag, dt.datetime.fromtimestamp(rospy.Time.now().to_time()).strftime("%H:%M:%S"),
-                self._goal_euclid.position.x, self._goal_euclid.position.y, self._goal_euclid.position.z,
-                self._goal_gps.position.y, self._goal_gps.position.x, self._goal_gps.position.z)
+                self._goal_euclid.x, self._goal_euclid.y, self._goal_euclid.z,
+                self._goal_gps.latitude, self._goal_gps.longitude, self._goal_gps.altitude)
             )
         else:
             rospy.logdebug("{} No goal waypoint received yet.".format(self._tag))
@@ -303,6 +307,7 @@ class solo_3dr(object):
         :type msg: String
         :return:
         """
+        # loiter mode also enables human to take control of the drone using RC controller manually
         rospy.logdebug("{}Mode {}".format(self._tag, msg.data))
         self._vehicle.mode = dronekit.VehicleMode("LOITER")
 

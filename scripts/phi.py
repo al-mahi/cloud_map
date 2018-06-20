@@ -2,7 +2,8 @@
 import numpy as np
 from scipy.stats import multivariate_normal
 import rospy
-from geometry_msgs.msg import Pose, Point, Quaternion, Twist, Vector3
+# from geometry_msgs.msg import Pose, Point, Quaternion, Twist, Vector3
+from cloud_map.msg import euclidean_location, geo_location
 from tf.transformations import quaternion_from_euler
 from rospy.numpy_msg import numpy_msg
 from std_msgs.msg import String, Float32
@@ -35,11 +36,13 @@ class Unexplored(object):
 
     def callback_pose(self, pose):
         """
-        :type pose: Pose
-        :return: 
+        :type pose: euclidean_location
+        :return:
         """
         try:
-            x, y, z = map(int, map(round, pose.position.__getstate__()[:]))
+            x = int(round(pose.x))
+            y = int(round(pose.y))
+            z = int(round(pose.z))
             if self._dim == 2:
                 val = self._phi_unexplored[y, x] + self._high/3.
                 # self._phi_unexplored[y, x] = min(val, self._high)
@@ -55,7 +58,7 @@ class Unexplored(object):
     def start(self):
         rospy.init_node(self._name, log_level=rospy.DEBUG)
         rate = rospy.Rate(2)
-        rospy.Subscriber("/UAV/" + self._name + "/pose", Pose, callback=self.callback_pose)
+        rospy.Subscriber("/UAV/" + self._name + "/pose", euclidean_location, callback=self.callback_pose)
         pub_unexplored = rospy.Publisher(self._name + '/unexplored', numpy_msg(Belief), queue_size=10.)
         while not rospy.is_shutdown():
             msg = Belief()
@@ -86,7 +89,7 @@ class HumidityChange(object):
         self._measured_hum = np.nan * np.ones(self._space)
         self._inferred_hum = np.zeros(self._space)
         self._phi_hum_change = np.zeros(self._space)
-        self._pose = Pose()
+        self._pose = euclidean_location()
         self._tag = "[Hum {}]".format(self._name)
         self._contour_scale = .3
 
@@ -127,7 +130,7 @@ class HumidityChange(object):
         rospy.init_node(self._name, log_level=rospy.DEBUG)
         rate = rospy.Rate(2)
         rospy.Subscriber("/Sensors/" + self._name + "/humidity", Float32, callback=self.callback_hum)
-        rospy.Subscriber("/UAV/{}/pose".format(self._name), Pose, callback=self.callback_sensor_pose_euclid)
+        rospy.Subscriber("/UAV/{}/pose".format(self._name), euclidean_location, callback=self.callback_sensor_pose_euclid)
         pub_hum_change = rospy.Publisher("/PHI/{}/humidity_change".format(self._name), numpy_msg(Belief), queue_size=10.)
 
         while not rospy.is_shutdown():
@@ -159,7 +162,7 @@ class TemperatureChange(object):
         self._measured_temp = np.nan * np.ones(self._space)
         self._inferred_temp = np.zeros(self._space)
         self._phi_temp_change = np.zeros(self._space)
-        self._pose = Pose()
+        self._pose = euclidean_location()
         self._tag = "[Temp {}]".format(self._name)
         self._contour_scale = .3
 
@@ -219,7 +222,7 @@ class TemperatureChange(object):
         rospy.init_node(self._name, log_level=rospy.DEBUG)
         rate = rospy.Rate(2)
         rospy.Subscriber("/Sensors/" + self._name + "/temperature", Float32, callback=self.callback_temp)
-        rospy.Subscriber("/UAV/{}/pose".format(self._name), Pose, callback=self.callback_sensor_pose_euclid)
+        rospy.Subscriber("/UAV/{}/pose".format(self._name), euclidean_location, callback=self.callback_sensor_pose_euclid)
         pub_temp_change = rospy.Publisher("/PHI/{}/temp_change".format(self._name), numpy_msg(Belief), queue_size=10.)
 
         while not rospy.is_shutdown():
@@ -249,15 +252,16 @@ class AvoidCollision(object):
         self._space = tuple([scale for _ in range(dim)])
         self._dim = len(self._space)
         self._phi_avoid_collision = np.zeros(self._space)
-        self._pose = Pose()
+        self._pose = euclidean_location()
         self._tag = "[Avoid {}]".format(self._name)
 
     def callback_sensor_pose_euclid(self, pose):
+        """
+        :type pose: euclidean_location
+        :return:
+        """
         self._pose = pose
-        if self._dim == 2:
-            mean = np.array(pose.position.__getstate__()[:self._dim], dtype='float')[::-1]
-        if self._dim == 3:
-            mean = np.roll(np.array(pose.position.__getstate__()[:self._dim], dtype='float')[::-1], 2)
+        mean = np.array([self._pose.x, self._pose.y, self._pose.z])
         dist = multivariate_normal(mean=mean, cov= 0.2 * self._scale * np.identity(self._dim))
         indices = np.ndindex(self._space)
         self._phi_avoid_collision = np.array(map(lambda x: dist.pdf(np.array(x[:])), indices), dtype=np.float32).reshape(self._space)
@@ -265,7 +269,7 @@ class AvoidCollision(object):
     def start(self):
         rospy.init_node(self._name, log_level=rospy.DEBUG)
         rate = rospy.Rate(2)
-        rospy.Subscriber("/UAV/{}/pose".format(self._name), Pose, callback=self.callback_sensor_pose_euclid)
+        rospy.Subscriber("/UAV/{}/pose".format(self._name), euclidean_location, callback=self.callback_sensor_pose_euclid)
         pub_avoid_collision = rospy.Publisher("/PHI/{}/avoid_collision".format(self._name), numpy_msg(Belief), queue_size=10.)
 
         while not rospy.is_shutdown():
@@ -294,7 +298,7 @@ class HumanIntention(object):
         self._scale = scale
         self._space = tuple([scale for _ in range(dim)])
         self._dim = len(self._space)
-        self._pose = Pose()
+        self._pose = euclidean_location()
         self.phi_human_annoying = np.zeros(self._space)
         self.phi_human_interesting = np.zeros(self._space)
         self._list_interesting = []  # type: [Pose]

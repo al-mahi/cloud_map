@@ -83,7 +83,7 @@ def FGthread(server_id, instance, controller_hostIP, control_input_config, freq_
     aircraft = '--aircraft=' + vehicle
 
     externals = '--units-meters --wind=0@0 --turbulence=0.0 --timeofday=noon --disable-random-objects ' \
-                '--disable-ai-models --disable-clouds3d --disable-clouds --runway=28L --geometry=600x400 ' \
+                '--disable-ai-models --disable-clouds3d --disable-clouds --runway=28L --geometry=400x250 ' \
                 '--prop:/sim/rendering/multithreading-mode=AutomaticSelection --disable-sound ' \
                 '--prop:/controls/engines/engine/starter=true --fog-disable --disable-horizon-effect ' \
                 '--prop:/controls/engines/engine/throttle=' + str(ithrottle) +' '\

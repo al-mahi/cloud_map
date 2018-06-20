@@ -63,7 +63,7 @@ class SenseTemperature(object):
                 except Exception as e:
                     rospy.logdebug("[A Temp Read Error]: {}".format(e.message))
             elif vendor_of_A=='flightgear':
-                self._true_tmp_A = 1.8* float(simA.FGRecv()[38])+32.
+                self._true_tmp_A = 1.8 * float(simA.FGRecv()[38])+32.
             rospy.logdebug("Temp: A({},{},{}) {}".format(xA, yA, zA, self._true_tmp_A))
             if self._dim == 3:
                 pub_A.publish(self._true_tmp_A)

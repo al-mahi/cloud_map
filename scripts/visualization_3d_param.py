@@ -10,6 +10,7 @@ import rospy
 from cloud_map.msg import euclidean_location, Belief #, path_history
 import datetime as dt
 
+
 class Visualization(object):
     def __init__(self, name, d):
         self.name = name
@@ -117,8 +118,10 @@ class Visualization(object):
         p = ax.scatter(x, y, z, c=t[ind], norm=norm, alpha=.6)
         if all(val is not None for val in self._path_history.values()):
             try:
-                path_line = ax.plot(xs=self._path_history["xs"], ys=self._path_history["ys"],
-                                    zs=self._path_history["zs"], c='r')
+                p_xs = np.array(self._path_history["xs"])
+                p_ys = np.array(self._path_history["ys"])
+                p_zs = np.array(self._path_history["zs"])
+                path_line = ax.plot(xs=p_xs, ys=p_ys, zs=p_zs, c='r')
             except ValueError as ex:
                 rospy.logdebug("{} {}".format(self.tag, ex.message))
         cb = plt.colorbar(p, cax=cax)
