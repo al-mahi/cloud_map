@@ -2,7 +2,7 @@
 This project aims to coordinated control of heterogenous robots using factor graph for collecting low altitude weather data.
     
     Usage: roslaunch cloud_map uav.launch
-Requires ROS installation. Setup of communication network.
+Requires ROS installation. Setup of communication network and deployment of GPS enable UAS.
 
 ## Summer Campaign 2017 Agenda
 * Flying 3DR Solo quadrotors in a coordinated fashion. 
